@@ -14,12 +14,12 @@ export async function POST(req: Request) {
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
-    return NextResponse.json({ error: "계정 없음" }, { status: 401 });
+    return NextResponse.json({ error: "아이디 또는 비밀번호가 틀렸습니다." }, { status: 401 });
   }
 
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) {
-    return NextResponse.json({ error: "비밀번호 오류" }, { status: 401 });
+    return NextResponse.json({ error: "아이디 또는 비밀번호가 틀렸습니다." }, { status: 401 });
   }
 
   const token = jwt.sign(

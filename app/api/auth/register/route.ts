@@ -19,9 +19,25 @@ export async function POST(req: Request) {
 
   const hashed = await bcrypt.hash(password, 10);
 
-  await prisma.user.create({
-    data: { email, password: hashed },
-  });
+  await prisma.$transaction(async(tx) => {
+    const user = await tx.user.create({
+      data: { email, password: hashed },
+    });
+  
+    await tx.grade.createMany({
+      data : Array.from({ length: 6 }, (_, i) => 
+        [1, 2].map((term) => ({
+        userId: user.id,
+        year:i+1,
+        term,
+        isCurrent: i === 0 && term ===1,
+      })),
+      ).flat(),
+    });
+
+    return user;
+
+    });
 
   return NextResponse.json({ ok: true });
 }

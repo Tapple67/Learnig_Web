@@ -18,4 +18,38 @@ model User {
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
+  
+  grades Grade[]
+}
+
+
+model Grade {
+  id        String   @id @default(cuid())
+  year      Int      //학년                         // user User( User 테이블과의 관계 필드), ,
+  term      Int      //학기                         //fields: [userId]는 User와 연결하는 왜래키로 사용
+  userId    String                                  //references는 User의 id를 참조, on onDelete는 USer가 삭제되면 Grade도 삭제
+  isCurrent Boolean @default(false) 
+  createdAt DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  subjects Subject[]    //1:N 관계 여러개의 과목이 있을 수 있다.
+
+  @@unique([year, term, userId])   // 같은 연도, 같은 학기의Grade를 중복으로 만들 수 없다.
+  @@index([userId])   // userId에 인덱스를 지정해서 찾기 쉽게 함
+}
+
+
+
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String
+  gradeId   String
+  createdAt DateTime @default(now())
+  isCurrent Boolean @default(false)
+
+  grade   Grade   @relation(fields:[gradeId], references: [id], onDelete: Cascade)
+  
+  @@index([gradeId])
 }
