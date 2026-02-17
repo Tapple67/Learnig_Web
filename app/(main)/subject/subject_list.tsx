@@ -1,37 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
+type Subject = { id: string; name: string };
 
-type Subject = {
-    id: string;
-    name: string;
-}
-
-type props = {
-    gradeId?: string;
-    selectedSubjectId?: string;
-    onSelect: (SubjectId: string) => void;
-};
-
-export default function Subject_List({gradeId,selectedSubjectId,onSelect}: props){
-const [subjects, setsubjects] = useState<Subject[]>([]); 
-
-
-//2.과목 목록 불러오기
-    useEffect(() => {
-  if (!gradeId) return;
-
-  fetch(`/api/subjects?gradeId=${gradeId}`, { cache: "no-store" })
-    .then((res) => res.json())
-    .then((data: Subject[]) => setsubjects(data));
-}, [gradeId]);
-    
-
-    
-    return (
+export default function Subject_List({
+  subjects,
+  selectedSubjectId,
+  onSelect,
+}: {
+  subjects: Subject[];
+  selectedSubjectId?: string;
+  onSelect: (subjectId: string) => void;
+}) {
+  return (
     <div>
-
       {subjects.map((s) => {
         const selected = selectedSubjectId === s.id;
 

@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+
+type Subject = { id: string; name: string; gradeId?: string };
 
 export default function AddSubject({
   selectedGradeId,
+  onCreated,
 }: {
   selectedGradeId?: string;
+  onCreated: (subject: Subject) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -14,14 +17,21 @@ export default function AddSubject({
   const [loading, setLoading] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    if (open) window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   const close = () => {
-    if (loading) return; // 로딩 중엔 닫기 방지
+    if (loading) return;
     setOpen(false);
     setName("");
     setError(null);
@@ -43,10 +53,7 @@ export default function AddSubject({
       const res = await fetch("/api/subjects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmed,
-          gradeId: selectedGradeId,
-        }),
+        body: JSON.stringify({ name: trimmed, gradeId: selectedGradeId }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -56,9 +63,8 @@ export default function AddSubject({
         return;
       }
 
-
+      onCreated(data.subject);
       close();
-      router.refresh();
     } catch {
       setError("네트워크 오류가 발생했습니다.");
     } finally {
@@ -66,8 +72,8 @@ export default function AddSubject({
     }
   };
 
-  if (!open) {
-    return (
+  return (
+    <>
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -75,64 +81,82 @@ export default function AddSubject({
       >
         + 과목 추가
       </button>
-    );
-  }
 
-  return (
-    <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
-            과목명
-          </label>
-          <input
-            ref={inputRef}
-            value={name}
-            disabled={loading}
-            onChange={(e) => {
-              setName(e.target.value);
-              if (error) setError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
-              if (e.key === "Escape") close();
-            }}
-            placeholder="예: 데이터베이스"
-            maxLength={50}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400 focus:ring-4 focus:ring-gray-100 disabled:bg-gray-100"
-          />
-        </div>
-
-        <div className="flex gap-2 sm:pt-5">
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          aria-modal="true"
+          role="dialog"
+        >
+          {/* Backdrop */}
           <button
             type="button"
-            onClick={submit}
-            disabled={loading || !name.trim()}
-            className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "추가 중..." : "추가"}
-          </button>
-
-          <button
-            type="button"
+            className="absolute inset-0 bg-black/40"
             onClick={close}
-            disabled={loading}
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-60"
-          >
-            취소
-          </button>
-        </div>
-      </div>
+            aria-label="닫기"
+          />
 
-      {error && (
-        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
+          {/* Modal */}
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-5 shadow-lg">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold">과목 추가</h2>
+              <button
+                type="button"
+                onClick={close}
+                disabled={loading}
+                className="rounded-lg px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <label className="block text-sm text-gray-600">과목명</label>
+              <input
+                ref={inputRef}
+                value={name}
+                disabled={loading}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (error) setError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submit();
+                }}
+                placeholder="예: 데이터베이스"
+                maxLength={50}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-gray-400 focus:ring-4 focus:ring-gray-100 disabled:bg-gray-100"
+              />
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={close}
+                disabled={loading}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={loading || !name.trim()}
+                className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {loading ? "추가 중..." : "추가"}
+              </button>
+            </div>
+
+            <p className="mt-2 text-xs text-gray-500">ESC로 닫기</p>
+          </div>
         </div>
       )}
-
-      <div className="mt-2 text-xs text-gray-500">
-        Enter로 추가 · Esc로 취소
-      </div>
-    </div>
+    </>
   );
 }
