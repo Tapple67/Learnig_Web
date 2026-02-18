@@ -10,9 +10,7 @@ export default async function SubjectPage({
   const params = await searchParams;
 
   const userId = await getUserId();
-  if (!userId) {
-    return <div>로그인이 필요합니다.</div>;
-  }
+  if (!userId) return <div>로그인이 필요합니다.</div>;
 
   const grades = await prisma.grade.findMany({
     where: { userId },
@@ -21,14 +19,11 @@ export default async function SubjectPage({
   });
 
   const selectedGradeId = params.gradeId ?? grades[0]?.id;
-  const subjectId = params.subjectId;
+  const selectedSubjectId = params.subjectId;
 
   const subjects = selectedGradeId
     ? await prisma.subject.findMany({
-        where: {
-          gradeId: selectedGradeId,
-          grade: { userId },
-        },
+        where: { gradeId: selectedGradeId, grade: { userId } },
         orderBy: { createdAt: "desc" },
         select: { id: true, name: true, gradeId: true },
       })
@@ -39,7 +34,7 @@ export default async function SubjectPage({
       grades={grades}
       subjects={subjects}
       selectedGradeId={selectedGradeId}
-      selectedSubjectId={subjectId}
+      selectedSubjectId={selectedSubjectId}
     />
   );
 }
