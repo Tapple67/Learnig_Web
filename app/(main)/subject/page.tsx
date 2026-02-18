@@ -1,25 +1,45 @@
-
 import { getUserId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { redirect } from "next/navigation";
-import { NextResponse } from "next/server";
 import Combi from "./combi";
 
+export default async function SubjectPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ gradeId?: string; subjectId?: string }>;
+}) {
+  const params = await searchParams;
 
-
-
-export default async function Subject() {
   const userId = await getUserId();
-  if (!userId) redirect("/login");
+  if (!userId) {
+    return <div>로그인이 필요합니다.</div>;
+  }
 
-  
+  const grades = await prisma.grade.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, year: true, term: true },
+  });
 
+  const selectedGradeId = params.gradeId ?? grades[0]?.id;
+  const subjectId = params.subjectId;
+
+  const subjects = selectedGradeId
+    ? await prisma.subject.findMany({
+        where: {
+          gradeId: selectedGradeId,
+          grade: { userId },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, name: true, gradeId: true },
+      })
+    : [];
 
   return (
-    <div>
-     <h1> 과목 탭 입니다</h1>
-     
-     <Combi />
-    </div>
+    <Combi
+      grades={grades}
+      subjects={subjects}
+      selectedGradeId={selectedGradeId}
+      selectedSubjectId={subjectId}
+    />
   );
 }

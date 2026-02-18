@@ -1,6 +1,6 @@
 "use client";
 
-type Grade = { id: string; year: number; term: number };
+type Grade = { id: string; year: number; term:number | null };
 
 export default function Grade_List({
   grades,
@@ -24,7 +24,7 @@ export default function Grade_List({
               ${selected ? "border-blue-500 bg-blue-50 font-semibold" : "border-gray-300"}
             `}
           >
-            {g.year}-{g.term}
+            {g.year} - {g.term}
           </button>
         );
       })}
