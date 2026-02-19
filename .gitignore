@@ -47,4 +47,4 @@ logs/
 *.log
 
 
-/app/generated/prisma
+/app/generated/prismanul
