@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Grade_List from "./grade_list";
 import Subject_List from "./subject_list";
 import AddSubject from "./addsubject";
-
+import DeleteSubject from "./del_subjcet";
 
 type Grade = { id: string; year: number; term: number | null };
 type Subject = { id: string; name: string; gradeId: string };
@@ -48,7 +48,7 @@ export default function Combi({
       
       <AddSubject selectedGradeId={selectedGradeId} />
 
-
+      <DeleteSubject selectedSubjectId={selectedSubjectId}  />
     </div>
   );
 }

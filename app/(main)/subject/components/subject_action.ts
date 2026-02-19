@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 type ActionState = { ok: boolean; error?: string } | null;
 
-export async function SubjectAction(
+export async function AddSubjectAction(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "@/app/components/ui/modal";
-import { SubjectAction } from "./subject_action";
+import { AddSubjectAction } from "@/app/(main)/subject/components/subject_action"
 
 type ActionState = { ok: boolean; error?: string } | null;
 
@@ -13,7 +13,7 @@ export default function AddSubject({ selectedGradeId }: { selectedGradeId?: stri
   const [name, setName] = useState("");
 
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(
-    SubjectAction,
+    AddSubjectAction,
     null
   );
 
