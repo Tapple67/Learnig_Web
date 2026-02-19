@@ -1,74 +1,64 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/auth";
 
 export async function GET(req: Request) {
   const userId = await getUserId();
-  if (!userId)
-    return NextResponse.json({ error: "권한이 없습니다. 로그인하세요" }, { status: 401 });
+  if (!userId) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
-  const materialId = String(searchParams.get("materialId") ?? "");
-  const pageParam = searchParams.get("page");
+  const materialId = String(searchParams.get("materialId") ?? "").trim();
+  const page = Number(searchParams.get("page") ?? 0);
 
-  if (!materialId) {
-    return NextResponse.json({ error: "materialId가 필요합니다" }, { status: 400 });
-  }
+  if (!materialId) return NextResponse.json({ error: "materialId가 필요합니다." }, { status: 400 });
+  if (!page || page < 1) return NextResponse.json({ error: "page가 올바르지 않습니다." }, { status: 400 });
 
-  const material = await prisma.material.findUnique({ where: { id: materialId } });
-  if (!material) return NextResponse.json({ error: "자료가 없습니다" }, { status: 404 });
-
-  // 내 자료인지 확인(보안)
-  const subject = await prisma.subject.findFirst({
-    where: { id: material.subjectId, grade: { userId } },
+  // 소유 검증
+  const ok = await prisma.material.findFirst({
+    where: { id: materialId, subject: { grade: { userId } } },
     select: { id: true },
   });
-  if (!subject) return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  if (!ok) return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
 
-  // 특정 페이지 1개 조회
-  if (pageParam != null) {
-    const page = Number(pageParam);
-    const note = await prisma.pageNote.findUnique({
-      where: { materialId_page: { materialId, page } },
-    });
-    return NextResponse.json({ note });
-  }
-
-  // 전체 페이지 노트 조회
-  const notes = await prisma.pageNote.findMany({
-    where: { materialId },
-    orderBy: { page: "asc" },
+  const note = await prisma.note.findUnique({
+    where: { materialId_page: { materialId, page } },
+    select: { id: true, page: true, content: true, updatedAt: true },
   });
 
-  return NextResponse.json({ notes });
+  return NextResponse.json({ note: note ?? null });
 }
 
 export async function POST(req: Request) {
   const userId = await getUserId();
-  if (!userId)
-    return NextResponse.json({ error: "권한이 없습니다. 로그인하세요" }, { status: 401 });
-
-  const { materialId, page, content } = await req.json();
-
-  if (!materialId || !Number.isFinite(Number(page))) {
-    return NextResponse.json({ error: "materialId/page가 필요합니다" }, { status: 400 });
+  if (!userId) {
+    return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
-  const material = await prisma.material.findUnique({ where: { id: materialId } });
-  if (!material) return NextResponse.json({ error: "자료가 없습니다" }, { status: 404 });
+  const body = await req.json().catch(() => null);
+  const materialId = String(body?.materialId ?? "").trim();
+  const page = Number(body?.page ?? 0);
+  const content = String(body?.content ?? "");
 
-  // 내 자료인지 확인(보안)
-  const subject = await prisma.subject.findFirst({
-    where: { id: material.subjectId, grade: { userId } },
+  if (!materialId) return NextResponse.json({ error: "materialId가 필요합니다." }, { status: 400 });
+  if (!page || page < 1) return NextResponse.json({ error: "page가 올바르지 않습니다." }, { status: 400 });
+
+  // 소유 검증
+  const ok = await prisma.material.findFirst({
+    where: { id: materialId, subject: { grade: { userId } } },
     select: { id: true },
   });
-  if (!subject) return NextResponse.json({ error: "권한이 없습니다" }, { status: 403 });
+  if (!ok) return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
 
-  const note = await prisma.pageNote.upsert({
-    where: { materialId_page: { materialId, page: Number(page) } },
-    update: { content: String(content ?? "") },
-    create: { materialId, page: Number(page), content: String(content ?? "") },
+  const note = await prisma.note.upsert({
+    where: { materialId_page: { materialId, page } },
+    update: { content },
+    create: { materialId, page, content },
+    select: { id: true, page: true, content: true, updatedAt: true },
   });
 
-  return NextResponse.json({ note });
+  return NextResponse.json({ ok: true, note });
 }

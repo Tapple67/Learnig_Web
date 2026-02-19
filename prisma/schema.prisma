@@ -57,3 +57,31 @@ model Material {
   @@index([subjectId])
   @@index([week])
 }
+model Note {
+  id         String   @id @default(cuid())
+  materialId String
+  page       Int
+  content    String   @default("")
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, page]) // 같은 자료의 같은 페이지 메모는 1개만
+  @@index([materialId])
+}
+
+
+model Note {
+  id         String   @id @default(cuid())
+  materialId String
+  page       Int
+  content    String   @default("")
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, page])
+  @@index([materialId])
+}

@@ -1,13 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import PdfViewer from "./PdfViewer";
 
 type Grade = { id: string; year: number; term: number };
 type Subject = { id: string; name: string };
 type Material = { id: string; week: number; title: string; fileUrl: string };
 
+type ViewMode = "scroll" | "single";
+
 export default function RecordPage() {
   const [msg, setMsg] = useState("");
+
+  // 토스트
+  const [toast, setToast] = useState<string>("");
+  const toastTimerRef = useRef<number | null>(null);
+  const showToast = (text: string) => {
+    setToast(text);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(""), 1200);
+  };
 
   const [grades, setGrades] = useState<Grade[]>([]);
   const [selectedGradeId, setSelectedGradeId] = useState("");
@@ -18,12 +30,23 @@ export default function RecordPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [activeMaterialId, setActiveMaterialId] = useState<string>("");
 
+  const activeMaterial = useMemo(
+    () => materials.find((m) => m.id === activeMaterialId) ?? null,
+    [materials, activeMaterialId]
+  );
+
+  const [viewMode, setViewMode] = useState<ViewMode>("single");
+
   const [page, setPage] = useState(1);
+
+  // 메모 캐시
+  const [noteCache, setNoteCache] = useState<Record<string, string>>({});
   const [content, setContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loadingNote, setLoadingNote] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const activeMaterial = materials.find((m) => m.id === activeMaterialId) ?? null;
 
   // grades
   useEffect(() => {
@@ -32,7 +55,6 @@ export default function RecordPage() {
       const res = await fetch("/api/grades");
       const data = await res.json().catch(() => null);
       if (!res.ok) return setMsg(data?.error ?? "학기 불러오기 실패");
-
       setGrades(data ?? []);
       if ((data ?? []).length > 0) setSelectedGradeId((data ?? [])[0].id);
     })();
@@ -46,7 +68,6 @@ export default function RecordPage() {
       const res = await fetch(`/api/subjects?gradeId=${selectedGradeId}`);
       const data = await res.json().catch(() => null);
       if (!res.ok) return setMsg(data?.error ?? "과목 불러오기 실패");
-
       setSubjects(data ?? []);
       if ((data ?? []).length > 0) setSelectedSubjectId((data ?? [])[0].id);
       else setSelectedSubjectId("");
@@ -76,6 +97,7 @@ export default function RecordPage() {
     const firstId = list[0]?.id ?? "";
     setActiveMaterialId(firstId);
     setPage(1);
+    setDirty(false);
     setContent("");
   }
 
@@ -83,11 +105,11 @@ export default function RecordPage() {
     if (!selectedSubjectId) return setMsg("과목을 먼저 선택해줘");
     if (file.type !== "application/pdf") return setMsg("PDF만 업로드 가능해");
 
-    // 다음 week 계산
     const nextWeek =
       materials.length === 0 ? 1 : Math.max(...materials.map((m) => m.week)) + 1;
 
-    const title = window.prompt("자료 이름(예: 3주차 자료)", `${nextWeek}주차 자료`) ?? "";
+    const title =
+      window.prompt("자료 이름(예: 3주차 자료)", `${nextWeek}주차 자료`) ?? "";
     const finalTitle = title.trim() || `${nextWeek}주차 자료`;
 
     const form = new FormData();
@@ -99,20 +121,117 @@ export default function RecordPage() {
     setMsg("");
     const res = await fetch("/api/materials", { method: "POST", body: form });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return setMsg(data?.error ?? "업로드 실패");
+    if (!res.ok) return setMsg(data?.error ?? `업로드 실패 (${res.status})`);
 
-    setMsg("업로드 완료!");
-    await loadMaterials(selectedSubjectId); // ✅ 업로드 후 즉시 반영
+    showToast("업로드 완료!");
+    await loadMaterials(selectedSubjectId);
   }
 
-  const pdfSrc = activeMaterial ? `${activeMaterial.fileUrl}#page=${page}` : "";
+  // ===== 메모 로드/저장 =====
+  const currentKey = useMemo(() => {
+    if (!activeMaterialId) return "";
+    return `${activeMaterialId}:${page}`;
+  }, [activeMaterialId, page]);
+
+  useEffect(() => {
+    if (!activeMaterialId) return;
+
+    // 캐시 즉시 반영
+    const cached = noteCache[currentKey];
+    if (cached !== undefined) {
+      setContent(cached);
+      setDirty(false);
+    } else {
+      setContent("");
+      setDirty(false);
+    }
+
+    // 서버 동기화
+    (async () => {
+      setLoadingNote(true);
+      setMsg("");
+      try {
+        const res = await fetch(`/api/notes?materialId=${activeMaterialId}&page=${page}`);
+        const data = await res.json().catch(() => null);
+        if (!res.ok) return setMsg(data?.error ?? `메모 불러오기 실패 (${res.status})`);
+
+        const serverContent = data?.note?.content ?? "";
+        setNoteCache((prev) => ({ ...prev, [currentKey]: serverContent }));
+        setContent(serverContent);
+        setDirty(false);
+      } finally {
+        setLoadingNote(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMaterialId, page]);
+
+  async function saveNote() {
+    if (!activeMaterialId) return false;
+
+    setSaving(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ materialId: activeMaterialId, page, content }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data?.error ?? `저장 실패 (${res.status})`);
+        return false;
+      }
+
+      setNoteCache((prev) => ({ ...prev, [currentKey]: content }));
+      setDirty(false);
+      showToast("저장되었습니다");
+      return true;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ✅ 페이지 변경 요청(스크롤 감지/버튼 클릭 모두 여기로 통일)
+  async function requestPageChange(nextPage: number) {
+    if (!activeMaterialId) return;
+
+    // 페이지 바꾸기 전에 수정중이면 저장 먼저
+    if (dirty) {
+      const ok = await saveNote();
+      if (!ok) return; // 저장 실패 시 페이지 변경 중단
+    }
+
+    setPage(Math.max(1, nextPage));
+  }
+
+  const pdfArea = (
+    <div className="h-[52vh] rounded-lg border overflow-hidden bg-white">
+      {!activeMaterial ? (
+        <div className="p-4 text-sm text-gray-500">왼쪽에서 PDF를 선택해줘.</div>
+      ) : (
+        <PdfViewer
+          fileUrl={activeMaterial.fileUrl}
+          mode={viewMode}
+          page={page}
+          onRequestPageChange={requestPageChange}
+        />
+      )}
+    </div>
+  );
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
+      {toast && (
+        <div className="fixed left-1/2 top-4 -translate-x-1/2 rounded-xl border bg-white px-4 py-2 text-sm shadow">
+          {toast}
+        </div>
+      )}
+
       {/* LEFT */}
       <div className="rounded-xl border">
         <div className="border-b p-3 space-y-2">
-          {msg && <div className="text-xs text-gray-600">{msg}</div>}
+          {msg && <div className="text-xs text-red-600">{msg}</div>}
 
           <select
             className="w-full rounded-lg border p-2 text-sm"
@@ -143,6 +262,7 @@ export default function RecordPage() {
               type="button"
               className="rounded-lg border px-3 text-sm hover:bg-gray-50"
               onClick={() => fileInputRef.current?.click()}
+              title="PDF 업로드"
             >
               +
             </button>
@@ -178,6 +298,7 @@ export default function RecordPage() {
                   onClick={() => {
                     setActiveMaterialId(m.id);
                     setPage(1);
+                    setDirty(false);
                     setContent("");
                   }}
                 >
@@ -192,45 +313,74 @@ export default function RecordPage() {
 
       {/* RIGHT */}
       <div className="rounded-xl border p-3 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-medium">수업파일 page</div>
-          <div className="flex gap-2">
+        {/* 상단: 보기모드 + 페이지 이동 */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-medium">수업파일</div>
+
+            <select
+              className="rounded-lg border px-2 py-1 text-sm"
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value as ViewMode)}
+              disabled={!activeMaterial}
+              title="보기 모드"
+            >
+              <option value="single">한 장씩 보기</option>
+              <option value="scroll">스크롤로 전체 보기</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Page: {page}</span>
+
             <button
               className="rounded-lg border px-3 py-1 text-sm disabled:opacity-50"
-              disabled={!activeMaterial || page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={!activeMaterial || page <= 1 || saving}
+              onClick={() => requestPageChange(page - 1)}
             >
               이전
             </button>
+
             <button
               className="rounded-lg border px-3 py-1 text-sm disabled:opacity-50"
-              disabled={!activeMaterial}
-              onClick={() => setPage((p) => p + 1)}
+              disabled={!activeMaterial || saving}
+              onClick={() => requestPageChange(page + 1)}
             >
               다음
             </button>
           </div>
         </div>
 
-        <div className="h-[55vh] rounded-lg border">
-          {!activeMaterial ? (
-            <div className="p-4 text-sm text-gray-500">왼쪽에서 PDF를 선택해줘.</div>
-          ) : (
-            <iframe title="pdf" src={pdfSrc} className="h-full w-full" />
-          )}
-        </div>
+        {pdfArea}
 
+        {/* 메모 */}
         <div className="rounded-lg border p-3">
-          <div className="mb-2 text-sm font-medium">사용자 기록</div>
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-medium">사용자 기록 (페이지별)</div>
+            <button
+              type="button"
+              onClick={() => saveNote()}
+              disabled={!activeMaterial || saving || loadingNote}
+              className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"
+            >
+              {saving ? "저장중..." : "저장"}
+            </button>
+          </div>
+
           <textarea
             className="h-[160px] w-full resize-none rounded-lg border p-3 text-sm"
-            placeholder="이 페이지에 대한 메모"
+            placeholder="현재 페이지에 대한 메모"
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            disabled={!activeMaterial}
+            onChange={(e) => {
+              setContent(e.target.value);
+              setDirty(true);
+              setNoteCache((prev) => ({ ...prev, [currentKey]: e.target.value }));
+            }}
+            disabled={!activeMaterial || loadingNote}
           />
+
           <div className="mt-2 text-xs text-gray-500">
-            메모 저장 연결은 다음 단계에서(지금은 업로드/뷰어/리스트 정상화 먼저).
+            스크롤로 페이지가 바뀌면 Page도 자동으로 바뀌고 → 메모도 그 페이지로 자동 전환돼야 정상.
           </div>
         </div>
       </div>
