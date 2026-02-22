@@ -6,6 +6,7 @@ import { getUserId } from "@/lib/auth";
 import path from "path";
 import fs from "fs/promises";
 import { randomUUID } from "crypto";
+import { logFileUpload } from "@/lib/activity";
 
 /**
  * 📌 자료 목록 불러오기
@@ -98,6 +99,11 @@ export async function POST(req: Request) {
   const material = await prisma.material.create({
     data: { subjectId, week, title, fileUrl },
     select: { id: true, week: true, title: true, fileUrl: true },
+  });
+
+  await logFileUpload({
+    userId,
+    materialId: material.id,
   });
 
   return NextResponse.json({ ok: true, material }, { status: 201 });

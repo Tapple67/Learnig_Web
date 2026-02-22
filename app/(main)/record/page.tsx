@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import PdfViewer from "./PdfViewer";
 
 type Grade = { id: string; year: number; term: number };
@@ -8,6 +9,45 @@ type Subject = { id: string; name: string };
 type Material = { id: string; week: number; title: string; fileUrl: string };
 
 export default function RecordPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // ✅ 최초 진입 URL 스냅샷(한 번만)
+  const initialRef = useRef({
+    gradeId: searchParams.get("gradeId") ?? "",
+    subjectId: searchParams.get("subjectId") ?? "",
+    materialId: searchParams.get("materialId") ?? "",
+    page: Math.max(1, Number(searchParams.get("page") ?? "1") || 1),
+  });
+
+  // ✅ URL 동기화 (상태 -> URL)
+  function replaceQuery(next: {
+    gradeId?: string;
+    subjectId?: string;
+    materialId?: string;
+    page?: number;
+  }) {
+    const sp = new URLSearchParams(searchParams.toString());
+
+    const setOrDelete = (k: string, v?: string) => {
+      if (v && v.trim()) sp.set(k, v);
+      else sp.delete(k);
+    };
+
+    const gradeId = next.gradeId ?? sp.get("gradeId") ?? "";
+    const subjectId = next.subjectId ?? sp.get("subjectId") ?? "";
+    const materialId = next.materialId ?? sp.get("materialId") ?? "";
+
+    setOrDelete("gradeId", gradeId);
+    setOrDelete("subjectId", subjectId);
+    setOrDelete("materialId", materialId);
+
+    if (typeof next.page === "number") sp.set("page", String(Math.max(1, next.page)));
+    else if (!sp.get("page")) sp.set("page", "1");
+
+    router.replace(`?${sp.toString()}`, { scroll: false });
+  }
+
   const [msg, setMsg] = useState("");
 
   // 토스트
@@ -51,23 +91,48 @@ export default function RecordPage() {
       const res = await fetch("/api/grades");
       const data = await res.json().catch(() => null);
       if (!res.ok) return setMsg(data?.error ?? "학기 불러오기 실패");
-      setGrades(data ?? []);
-      if ((data ?? []).length > 0) setSelectedGradeId((data ?? [])[0].id);
+
+      const list: Grade[] = data ?? [];
+      setGrades(list);
+
+      const wanted = initialRef.current.gradeId;
+      const picked =
+        (wanted && list.some((g) => g.id === wanted) && wanted) || list[0]?.id || "";
+
+      setSelectedGradeId(picked);
+      replaceQuery({ gradeId: picked, subjectId: "", materialId: "", page: 1 });
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // subjects
   useEffect(() => {
     if (!selectedGradeId) return;
+
     (async () => {
       setMsg("");
       const res = await fetch(`/api/subjects?gradeId=${selectedGradeId}`);
       const data = await res.json().catch(() => null);
       if (!res.ok) return setMsg(data?.error ?? "과목 불러오기 실패");
-      setSubjects(data ?? []);
-      if ((data ?? []).length > 0) setSelectedSubjectId((data ?? [])[0].id);
-      else setSelectedSubjectId("");
+
+      const list: Subject[] = data ?? [];
+      setSubjects(list);
+
+      const wanted = initialRef.current.subjectId;
+      const picked =
+        (wanted && list.some((s) => s.id === wanted) && wanted) || list[0]?.id || "";
+
+      setSelectedSubjectId(picked);
+
+      // 학기 바뀌면 자료/페이지는 초기화하는 게 안전
+      replaceQuery({
+        gradeId: selectedGradeId,
+        subjectId: picked,
+        materialId: "",
+        page: 1,
+      });
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGradeId]);
 
   // materials
@@ -75,13 +140,18 @@ export default function RecordPage() {
     if (!selectedSubjectId) {
       setMaterials([]);
       setActiveMaterialId("");
+      setPage(1);
+      setDirty(false);
+      setContent("");
+      replaceQuery({ subjectId: "", materialId: "", page: 1 });
       return;
     }
-    loadMaterials(selectedSubjectId);
+
+    loadMaterials(selectedSubjectId, initialRef.current.materialId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSubjectId]);
 
-  async function loadMaterials(subjectId: string) {
+  async function loadMaterials(subjectId: string, wantedMaterialId?: string) {
     setMsg("");
     const res = await fetch(`/api/materials?subjectId=${subjectId}`);
     const data = await res.json().catch(() => null);
@@ -90,11 +160,21 @@ export default function RecordPage() {
     const list: Material[] = data ?? [];
     setMaterials(list);
 
-    const firstId = list[0]?.id ?? "";
-    setActiveMaterialId(firstId);
-    setPage(1);
+    const picked =
+      (wantedMaterialId && list.some((m) => m.id === wantedMaterialId) && wantedMaterialId) ||
+      list[0]?.id ||
+      "";
+
+    setActiveMaterialId(picked);
+
+    // URL에 page 있으면 그거 우선, 없으면 1
+    const p = initialRef.current.page || 1;
+    setPage(p);
+
     setDirty(false);
     setContent("");
+
+    replaceQuery({ subjectId, materialId: picked, page: p });
   }
 
   async function uploadPdf(file: File) {
@@ -119,7 +199,8 @@ export default function RecordPage() {
     if (!res.ok) return setMsg(data?.error ?? `업로드 실패 (${res.status})`);
 
     showToast("업로드 완료!");
-    await loadMaterials(selectedSubjectId);
+    // 업로드 후 목록 재로드: 첫 자료로 자동 선택될 수 있으니 초기Ref는 쓰지 말고 현재 기준
+    await loadMaterials(selectedSubjectId, undefined);
   }
 
   // ===== 메모 로드/저장 =====
@@ -146,9 +227,7 @@ export default function RecordPage() {
       setLoadingNote(true);
       setMsg("");
       try {
-        const res = await fetch(
-          `/api/notes?materialId=${activeMaterialId}&page=${page}`
-        );
+        const res = await fetch(`/api/notes?materialId=${activeMaterialId}&page=${page}`);
         const data = await res.json().catch(() => null);
         if (!res.ok) return setMsg(data?.error ?? `메모 불러오기 실패 (${res.status})`);
 
@@ -194,8 +273,9 @@ export default function RecordPage() {
     // 현재 페이지 메모 저장
     if (dirty) await saveNote();
 
-    // 다음 페이지로 이동
-    setPage(Math.max(1, nextPage));
+    const p = Math.max(1, nextPage);
+    setPage(p);
+    replaceQuery({ page: p });
   }
 
   return (
@@ -214,7 +294,14 @@ export default function RecordPage() {
           <select
             className="w-full rounded-lg border p-2 text-sm"
             value={selectedGradeId}
-            onChange={(e) => setSelectedGradeId(e.target.value)}
+            onChange={(e) => {
+              const id = e.target.value;
+              setSelectedGradeId(id);
+
+              // 아래 subjects/materials 로딩 흐름에서 정리되긴 하는데
+              // UX상 URL도 바로 정리해두면 좋아
+              replaceQuery({ gradeId: id, subjectId: "", materialId: "", page: 1 });
+            }}
           >
             {grades.map((g) => (
               <option key={g.id} value={g.id}>
@@ -227,7 +314,11 @@ export default function RecordPage() {
             <select
               className="w-full rounded-lg border p-2 text-sm"
               value={selectedSubjectId}
-              onChange={(e) => setSelectedSubjectId(e.target.value)}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelectedSubjectId(id);
+                replaceQuery({ subjectId: id, materialId: "", page: 1 });
+              }}
             >
               {subjects.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -278,6 +369,7 @@ export default function RecordPage() {
                     setPage(1);
                     setDirty(false);
                     setContent("");
+                    replaceQuery({ materialId: m.id, page: 1 });
                   }}
                 >
                   <div className="font-semibold">{m.title}</div>
@@ -322,10 +414,7 @@ export default function RecordPage() {
           {!activeMaterial ? (
             <div className="p-4 text-sm text-gray-500">왼쪽에서 PDF를 선택해줘.</div>
           ) : (
-            <PdfViewer
-              fileUrl={activeMaterial.fileUrl}
-              page={page}
-            />
+            <PdfViewer fileUrl={activeMaterial.fileUrl} page={page} />
           )}
         </div>
 

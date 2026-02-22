@@ -21,7 +21,7 @@ export default async function SubjectPage({
   });
 
   const selectedGradeId = params.gradeId ?? grades[0]?.id;
-  const subjectId = params.subjectId;
+  const selectedSubjectId = params.subjectId;
 
   const subjects = selectedGradeId
     ? await prisma.subject.findMany({
@@ -39,7 +39,7 @@ export default async function SubjectPage({
       grades={grades}
       subjects={subjects}
       selectedGradeId={selectedGradeId}
-      selectedSubjectId={subjectId}
+      selectedSubjectId={selectedSubjectId}
     />
   );
 }

@@ -72,3 +72,30 @@ model Note {
   @@unique([materialId, page])
   @@index([materialId])
 }
+
+
+enum ActivityType {
+  FILE_UPLOAD
+  NOTE_EDIT
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  userId     String
+  type       ActivityType
+
+  gradeId    String
+  subjectId  String
+  subjectName  String
+  materialId String
+  materialTitle String 
+  page       Int?
+
+  title      String
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, materialId, page, type])
+  @@index([userId, updatedAt])
+}

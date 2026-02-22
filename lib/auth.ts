@@ -1,3 +1,5 @@
+//로그인 상태 확인 (서버)
+
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 
@@ -16,3 +18,4 @@ export async function getUserId() {
     return null;
   }
 }
+ 
