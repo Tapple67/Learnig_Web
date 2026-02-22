@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-
-const PdfViewer = dynamic(() => import("./PdfViewer"), { ssr: false });
+import PdfViewer from "./PdfViewer";
 
 type Grade = { id: string; year: number; term: number };
 type Subject = { id: string; name: string };
 type Material = { id: string; week: number; title: string; fileUrl: string };
-
-type ViewMode = "scroll" | "single";
 
 export default function RecordPage() {
   const [msg, setMsg] = useState("");
@@ -37,7 +33,6 @@ export default function RecordPage() {
     [materials, activeMaterialId]
   );
 
-  const [viewMode, setViewMode] = useState<ViewMode>("single");
   const [page, setPage] = useState(1);
 
   // 메모
@@ -136,6 +131,7 @@ export default function RecordPage() {
   useEffect(() => {
     if (!activeMaterialId) return;
 
+    // 캐시 먼저
     const cached = noteCache[currentKey];
     if (cached !== undefined) {
       setContent(cached);
@@ -145,6 +141,7 @@ export default function RecordPage() {
       setDirty(false);
     }
 
+    // 서버에서 최신
     (async () => {
       setLoadingNote(true);
       setMsg("");
@@ -190,9 +187,14 @@ export default function RecordPage() {
     }
   }
 
+  // ✅ “이전/다음” 눌렀을 때: (1) 현재 메모 저장 → (2) 페이지 이동 → (3) 새 페이지 메모 자동 로드
   async function requestPageChange(nextPage: number) {
     if (!activeMaterialId) return;
+
+    // 현재 페이지 메모 저장
     if (dirty) await saveNote();
+
+    // 다음 페이지로 이동
     setPage(Math.max(1, nextPage));
   }
 
@@ -289,24 +291,14 @@ export default function RecordPage() {
 
       {/* RIGHT */}
       <div className="rounded-xl border p-3 space-y-3">
+        {/* 상단 */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <div className="text-sm font-medium">수업파일</div>
-
-            <select
-              className="rounded-lg border px-2 py-1 text-sm"
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as ViewMode)}
-              disabled={!activeMaterial}
-            >
-              <option value="single">한 장씩 보기</option>
-              <option value="scroll">스크롤로 전체 보기</option>
-            </select>
+            <div className="text-sm text-gray-600">Page: {page}</div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Page: {page}</span>
-
             <button
               className="rounded-lg border px-3 py-1 text-sm disabled:opacity-50"
               disabled={!activeMaterial || page <= 1}
@@ -325,19 +317,19 @@ export default function RecordPage() {
           </div>
         </div>
 
+        {/* PDF (한 장씩만) */}
         <div className="h-[52vh] rounded-lg border overflow-hidden bg-white">
           {!activeMaterial ? (
             <div className="p-4 text-sm text-gray-500">왼쪽에서 PDF를 선택해줘.</div>
           ) : (
             <PdfViewer
               fileUrl={activeMaterial.fileUrl}
-              mode={viewMode}
               page={page}
-              onPageChange={requestPageChange}
             />
           )}
         </div>
 
+        {/* 메모 */}
         <div className="rounded-lg border p-3">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-medium">사용자 기록 (페이지별)</div>
@@ -364,7 +356,7 @@ export default function RecordPage() {
           />
 
           <div className="mt-2 text-xs text-gray-500">
-            페이지가 바뀌면 해당 페이지 메모를 자동으로 불러옵니다.
+            이전/다음 버튼을 누르면 “PDF 페이지 + 메모”가 같이 바뀝니다.
           </div>
         </div>
       </div>

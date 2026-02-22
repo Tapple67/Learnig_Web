@@ -1,126 +1,122 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Document, Page, pdfjs } from "react-pdf";
+import { useEffect, useRef, useState } from "react";
 
-pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-
-type Mode = "single" | "scroll";
-
-export default function PdfViewer({
-  fileUrl,
-  mode,
-  page,
-  onPageChange,
-}: {
+type Props = {
   fileUrl: string;
-  mode: Mode;
   page: number;
-  onPageChange: (p: number) => void;
-}) {
-  const [numPages, setNumPages] = useState(0);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
+  onNumPages?: (n: number) => void; // (선택) 총 페이지 전달
+};
 
-  const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const ignoreSyncRef = useRef(false);
+export default function PdfViewer({ fileUrl, page, onNumPages }: Props) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pdfRef = useRef<any>(null); // PDFDocumentProxy
+  const renderTaskRef = useRef<any>(null);
 
-  const onLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-  };
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
 
+  // ✅ 1) PDF 로드(파일 바뀔 때만)
   useEffect(() => {
-    if (mode !== "scroll") return;
-    const el = wrapRef.current;
-    if (!el) return;
+    let canceled = false;
 
-    const onScroll = () => {
-      if (ignoreSyncRef.current) return;
+    (async () => {
+      setErr("");
+      setLoading(true);
 
-      const topY = el.getBoundingClientRect().top + 20;
+      try {
+        // pdfjs는 SSR에서 터질 수 있으니 브라우저에서만 동적 import
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
 
-      let best = 1;
-      let bestDist = Infinity;
+        // worker 설정(필수) - public에 pdf.worker.min.js 를 두는 방식
+        // ✅ 아래에 "public에 worker 넣는 법" 설명해줄게
+        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
 
-      for (let p = 1; p <= numPages; p++) {
-        const node = pageRefs.current[p];
-        if (!node) continue;
-        const r = node.getBoundingClientRect();
-        const dist = Math.abs(r.top - topY);
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = p;
-        }
+        // 이전 문서 정리
+        pdfRef.current = null;
+
+        const loadingTask = pdfjs.getDocument({
+          url: fileUrl,
+          withCredentials: false,
+        });
+
+        const pdf = await loadingTask.promise;
+        if (canceled) return;
+
+        pdfRef.current = pdf;
+        onNumPages?.(pdf.numPages);
+      } catch (e: any) {
+        if (!canceled) setErr(e?.message ?? "PDF 로드 실패");
+      } finally {
+        if (!canceled) setLoading(false);
       }
+    })();
 
-      if (best !== page) onPageChange(best);
+    return () => {
+      canceled = true;
+      try {
+        renderTaskRef.current?.cancel?.();
+      } catch {}
     };
+  }, [fileUrl, onNumPages]);
 
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [mode, numPages, page, onPageChange]);
-
+  // ✅ 2) 현재 페이지 렌더(페이지 바뀔 때마다)
   useEffect(() => {
-    if (mode !== "scroll") return;
-    const node = pageRefs.current[page];
-    if (!node) return;
+    let canceled = false;
 
-    ignoreSyncRef.current = true;
-    node.scrollIntoView({ block: "start" });
-    requestAnimationFrame(() => {
-      ignoreSyncRef.current = false;
-    });
-  }, [mode, page]);
+    (async () => {
+      if (!pdfRef.current) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-  const pageWidth = useMemo(() => {
-    const w = wrapRef.current?.clientWidth ?? 900;
-    return Math.max(320, Math.min(1100, w - 24));
-  }, [fileUrl, mode]);
+      setErr("");
+
+      try {
+        // 이전 렌더 작업 취소(연속 클릭 대비)
+        try {
+          renderTaskRef.current?.cancel?.();
+        } catch {}
+
+        const pdf = pdfRef.current;
+        const safePage = Math.max(1, Math.min(page, pdf.numPages));
+
+        const pdfPage = await pdf.getPage(safePage);
+        if (canceled) return;
+
+        const viewport = pdfPage.getViewport({ scale: 1.5 }); // 선명도 (필요하면 1.2~2.0 조절)
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+
+        const renderTask = pdfPage.render({
+          canvasContext: ctx,
+          viewport,
+        });
+
+        renderTaskRef.current = renderTask;
+        await renderTask.promise;
+      } catch (e: any) {
+        if (!canceled) setErr(e?.message ?? "PDF 렌더 실패");
+      }
+    })();
+
+    return () => {
+      canceled = true;
+      try {
+        renderTaskRef.current?.cancel?.();
+      } catch {}
+    };
+  }, [page]);
 
   return (
-    <div ref={wrapRef} className="h-full w-full overflow-auto p-2">
-      <Document
-        file={fileUrl}
-        onLoadSuccess={onLoadSuccess}
-        loading={<div className="text-sm text-gray-600">PDF 로딩 중...</div>}
-        error={<div className="text-sm text-red-600">PDF 로딩 실패</div>}
-        noData={<div className="text-sm text-gray-600">PDF 없음</div>}
-      >
-        {mode === "single" ? (
-          <div className="flex justify-center">
-            <Page
-              pageNumber={page}
-              width={pageWidth}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-            />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {Array.from({ length: numPages }, (_, idx) => {
-              const p = idx + 1;
-              return (
-                <div
-                  key={p}
-                  ref={(el) => {
-                    pageRefs.current[p] = el;
-                  }}
-                  className={p === page ? "ring-2 ring-blue-400 rounded-md p-1" : ""}
-                >
-                  <div className="mb-1 text-xs text-gray-500">Page {p}</div>
-                  <div className="flex justify-center">
-                    <Page
-                      pageNumber={p}
-                      width={pageWidth}
-                      renderTextLayer={false}
-                      renderAnnotationLayer={false}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Document>
+    <div className="h-full w-full overflow-auto flex items-start justify-center p-2 bg-white">
+      {loading && <div className="text-sm text-gray-600">PDF 로딩 중...</div>}
+      {err && <div className="text-sm text-red-600">PDF 로딩 실패: {err}</div>}
+      {!loading && !err && (
+        <canvas ref={canvasRef} className="max-w-full h-auto border rounded" />
+      )}
     </div>
   );
 }
