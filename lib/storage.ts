@@ -1,7 +1,11 @@
+import { createClient } from "@supabase/supabase-js";
 
+export function supabaseService() {
+  const url = process.env.SUPABASE_URL!;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  if (!url || !serviceKey) throw new Error("Supabase env missing");
 
-
-export async function deleteStorageObjects(keys: string[]) {
-  // 지금은 스토리지 안 쓰니까 아무것도 안 함 (NO-OP)
-  return;
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false },
+  });
 }

@@ -34,7 +34,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       ...(title ? { title } : {}),
       ...(week !== undefined ? { week } : {}),
     },
-    select: { id: true, week: true, title: true, fileUrl: true },
+    select: { id: true, week: true, title: true, storagePath: true },
   });
 
   return NextResponse.json({ ok: true, material: updated });
@@ -48,7 +48,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   const material = await prisma.material.findFirst({
     where: { id, subject: { grade: { userId } } },
-    select: { id: true, fileUrl: true },
+    select: { id: true, storagePath: true },
   });
   if (!material) return NextResponse.json({ error: "권한이 없거나 자료가 없습니다." }, { status: 403 });
 
@@ -57,7 +57,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   // 파일 삭제(가능하면)
   try {
-    const abs = path.join(process.cwd(), "public", material.fileUrl);
+    const abs = path.join(process.cwd(), "public", material.storagePath);
     await fs.unlink(abs);
   } catch {}
 

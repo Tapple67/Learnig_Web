@@ -13,7 +13,7 @@ model User {
   password  String
   createdAt DateTime @default(now())
 
-  grades    Grade[]
+  grades Grade[]
 }
 
 model Grade {
@@ -24,8 +24,8 @@ model Grade {
   isCurrent Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subjects  Subject[]
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subjects Subject[]
 
   @@unique([year, term, userId])
   @@index([userId])
@@ -38,25 +38,47 @@ model Subject {
   createdAt DateTime @default(now())
   isCurrent Boolean  @default(false)
 
-  grade     Grade     @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  grade     Grade      @relation(fields: [gradeId], references: [id], onDelete: Cascade)
   materials Material[]
 
   @@index([gradeId])
 }
 
 model Material {
-  id        String   @id @default(cuid())
-  subjectId String
-  week      Int
-  title     String
-  fileUrl   String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  subjectId   String
+  week        Int
+  title       String
+  storagePath String
+  createdAt   DateTime @default(now())
 
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subject   Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   notes     Note[]
+  pageTexts MaterialPageText[]
+  summary   MaterialSummary?
+  quizSets  QuizSet[]
 
-  @@index([subjectId])
   @@unique([subjectId, week])
+  @@index([subjectId])
+}
+
+model MaterialPageText {
+  id         String @id @default(cuid())
+  materialId String
+  page       Int
+  text       String @default("")
+
+  charCount   Int      @default(0)
+  method      String? // "pdfjs"
+  status      String   @default("DONE") // "DONE" | "FAILED"
+  error       String?
+  extractedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, page])
+  @@index([materialId])
 }
 
 model Note {
@@ -67,12 +89,11 @@ model Note {
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 
-  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
   @@unique([materialId, page])
   @@index([materialId])
 }
-
 
 enum ActivityType {
   FILE_UPLOAD
@@ -80,22 +101,144 @@ enum ActivityType {
 }
 
 model ActivityLog {
-  id         String   @id @default(uuid())
-  userId     String
-  type       ActivityType
+  id     String       @id @default(uuid())
+  userId String
+  type   ActivityType
 
-  gradeId    String
-  subjectId  String
-  subjectName  String
-  materialId String
-  materialTitle String 
-  page       Int?
+  gradeId       String
+  subjectId     String
+  subjectName   String
+  materialId    String
+  materialTitle String
+  page          Int?
 
-  title      String
+  title String
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([userId, materialId, page, type])
   @@index([userId, updatedAt])
+}
+
+model Job {
+  id       String @id @default(cuid())
+  type     String // "EXTRACT_PDF" | ...
+  status   String @default("PENDING") // "PENDING" | "RUNNING" | "DONE" | "FAILED"
+  priority Int    @default(0)
+
+  materialId String?
+  page       Int?
+  payload    Json?
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(3)
+
+  lockedAt  DateTime?
+  lockedBy  String?
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, type, priority, createdAt])
+  @@index([materialId, type, status])
+}
+
+model MaterialSummary {
+  id            String   @id @default(cuid())
+  materialId    String   @unique
+  sourceHash    String
+  content       String   @db.Text
+  provider      String?
+  model         String?
+  promptVersion String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@index([sourceHash])
+}
+
+model QuizSet {
+  id         String  @id @default(cuid())
+  materialId String
+  summaryId  String?
+  sourceHash String
+
+  title         String?
+  provider      String?
+  model         String?
+  promptVersion String?
+
+  createdAt DateTime @default(now())
+
+  material Material      @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  items    QuizItem[]
+  attempts QuizAttempt[]
+
+  @@index([materialId, createdAt])
+  @@index([sourceHash])
+}
+
+model QuizItem {
+  id        String @id @default(cuid())
+  quizSetId String
+  order     Int
+  type      String // "mcq" | "tf" | "short"
+
+  question    String  @db.Text
+  choices     Json? // mcq: string[] / tf: ["O","X"] 같이 저장 가능
+  answerKey   Json // 정답: 타입별 구조
+  explanation String? @db.Text // ✅ 해설
+  points      Int     @default(1)
+
+  createdAt DateTime @default(now())
+
+  quizSet QuizSet      @relation(fields: [quizSetId], references: [id], onDelete: Cascade)
+  answers QuizAnswer[]
+
+  @@index([quizSetId, order])
+}
+
+model QuizAttempt {
+  id        String @id @default(cuid())
+  userId    String
+  quizSetId String
+
+  status      String    @default("IN_PROGRESS") // IN_PROGRESS | SUBMITTED | GRADED
+  score       Int?
+  maxScore    Int?
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+  gradedAt    DateTime?
+
+  quizSet QuizSet      @relation(fields: [quizSetId], references: [id], onDelete: Cascade)
+  answers QuizAnswer[]
+
+  @@index([userId, startedAt])
+  @@index([quizSetId, startedAt])
+}
+
+model QuizAnswer {
+  id         String @id @default(cuid())
+  attemptId  String
+  quizItemId String
+
+  response  Json // 유저 답
+  isCorrect Boolean?
+  earned    Int?
+  feedback  String?  @db.Text // 선택: 단답에서 LLM 피드백 등
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attempt QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  item    QuizItem    @relation(fields: [quizItemId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, quizItemId])
+  @@index([attemptId])
+  @@index([quizItemId])
 }

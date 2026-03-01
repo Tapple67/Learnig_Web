@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import PdfViewer from "./PdfViewer";
+import Modal from "@/app/components/ui/modal";
 
 type Grade = { id: string; year: number; term: number };
 type Subject = { id: string; name: string };
-type Material = { id: string; week: number; title: string; fileUrl: string };
+// ✅ fileUrl 제거 (signedUrl은 별도 API로 받음)
+type Material = { id: string; week: number; title: string };
 
 export default function RecordPage() {
   const router = useRouter();
@@ -75,6 +77,44 @@ export default function RecordPage() {
 
   const [page, setPage] = useState(1);
 
+  // ✅ signed URL (Supabase private bucket)
+  const [signedUrl, setSignedUrl] = useState("");
+  const [loadingFileUrl, setLoadingFileUrl] = useState(false);
+
+  async function fetchSignedUrl(materialId: string) {
+    setLoadingFileUrl(true);
+    setMsg("");
+    try {
+      const res = await fetch(`/api/materials/file_url?materialId=${materialId}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setSignedUrl("");
+        setMsg(data?.error ?? `signedUrl 불러오기 실패 (${res.status})`);
+        return;
+      }
+
+      const url = data?.signedUrl ?? "";
+      setSignedUrl(url);
+      if (!url) setMsg("signedUrl이 비어있음");
+    } finally {
+      setLoadingFileUrl(false);
+    }
+  }
+
+  // ✅ activeMaterialId 바뀌면 signedUrl 발급
+  useEffect(() => {
+    if (!activeMaterialId) {
+      setSignedUrl("");
+      return;
+    }
+    fetchSignedUrl(activeMaterialId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMaterialId]);
+
   // 메모
   const [noteCache, setNoteCache] = useState<Record<string, string>>({});
   const [content, setContent] = useState("");
@@ -88,7 +128,7 @@ export default function RecordPage() {
   useEffect(() => {
     (async () => {
       setMsg("");
-      const res = await fetch("/api/grades");
+      const res = await fetch("/api/grades", { cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (!res.ok) return setMsg(data?.error ?? "학기 불러오기 실패");
 
@@ -111,7 +151,7 @@ export default function RecordPage() {
 
     (async () => {
       setMsg("");
-      const res = await fetch(`/api/subjects?gradeId=${selectedGradeId}`);
+      const res = await fetch(`/api/subjects?gradeId=${selectedGradeId}`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (!res.ok) return setMsg(data?.error ?? "과목 불러오기 실패");
 
@@ -124,7 +164,6 @@ export default function RecordPage() {
 
       setSelectedSubjectId(picked);
 
-      // 학기 바뀌면 자료/페이지는 초기화하는 게 안전
       replaceQuery({
         gradeId: selectedGradeId,
         subjectId: picked,
@@ -140,6 +179,7 @@ export default function RecordPage() {
     if (!selectedSubjectId) {
       setMaterials([]);
       setActiveMaterialId("");
+      setSignedUrl("");
       setPage(1);
       setDirty(false);
       setContent("");
@@ -153,7 +193,7 @@ export default function RecordPage() {
 
   async function loadMaterials(subjectId: string, wantedMaterialId?: string) {
     setMsg("");
-    const res = await fetch(`/api/materials?subjectId=${subjectId}`);
+    const res = await fetch(`/api/materials?subjectId=${subjectId}`, { cache: "no-store" });
     const data = await res.json().catch(() => null);
     if (!res.ok) return setMsg(data?.error ?? "자료 불러오기 실패");
 
@@ -167,7 +207,6 @@ export default function RecordPage() {
 
     setActiveMaterialId(picked);
 
-    // URL에 page 있으면 그거 우선, 없으면 1
     const p = initialRef.current.page || 1;
     setPage(p);
 
@@ -181,8 +220,7 @@ export default function RecordPage() {
     if (!selectedSubjectId) return setMsg("과목을 먼저 선택해줘");
     if (file.type !== "application/pdf") return setMsg("PDF만 업로드 가능해");
 
-    const nextWeek =
-      materials.length === 0 ? 1 : Math.max(...materials.map((m) => m.week)) + 1;
+    const nextWeek = materials.length === 0 ? 1 : Math.max(...materials.map((m) => m.week)) + 1;
 
     const title = window.prompt("자료 이름", `${nextWeek}주차 자료`) ?? "";
     const finalTitle = title.trim() || `${nextWeek}주차 자료`;
@@ -199,7 +237,6 @@ export default function RecordPage() {
     if (!res.ok) return setMsg(data?.error ?? `업로드 실패 (${res.status})`);
 
     showToast("업로드 완료!");
-    // 업로드 후 목록 재로드: 첫 자료로 자동 선택될 수 있으니 초기Ref는 쓰지 말고 현재 기준
     await loadMaterials(selectedSubjectId, undefined);
   }
 
@@ -212,7 +249,6 @@ export default function RecordPage() {
   useEffect(() => {
     if (!activeMaterialId) return;
 
-    // 캐시 먼저
     const cached = noteCache[currentKey];
     if (cached !== undefined) {
       setContent(cached);
@@ -222,12 +258,13 @@ export default function RecordPage() {
       setDirty(false);
     }
 
-    // 서버에서 최신
     (async () => {
       setLoadingNote(true);
       setMsg("");
       try {
-        const res = await fetch(`/api/notes?materialId=${activeMaterialId}&page=${page}`);
+        const res = await fetch(`/api/notes?materialId=${activeMaterialId}&page=${page}`, {
+          cache: "no-store",
+        });
         const data = await res.json().catch(() => null);
         if (!res.ok) return setMsg(data?.error ?? `메모 불러오기 실패 (${res.status})`);
 
@@ -266,16 +303,52 @@ export default function RecordPage() {
     }
   }
 
-  // ✅ “이전/다음” 눌렀을 때: (1) 현재 메모 저장 → (2) 페이지 이동 → (3) 새 페이지 메모 자동 로드
   async function requestPageChange(nextPage: number) {
     if (!activeMaterialId) return;
 
-    // 현재 페이지 메모 저장
     if (dirty) await saveNote();
 
     const p = Math.max(1, nextPage);
     setPage(p);
     replaceQuery({ page: p });
+  }
+
+  // ===== 퀴즈 생성: 모달 + 로딩 =====
+  const [confirmCreateOpen, setConfirmCreateOpen] = useState(false);
+  const [quizLoading, setQuizLoading] = useState(false);
+
+  async function handleConfirmCreateQuiz() {
+    if (!activeMaterialId) return;
+
+    // (선택) 메모 변경사항 저장하고 생성
+    if (dirty) await saveNote();
+
+    setConfirmCreateOpen(false);
+    setQuizLoading(true);
+    setMsg("");
+
+    try {
+      const res = await fetch("/api/quiz/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          materialId: activeMaterialId,
+          spec: { mcqCount: 2, tfCount: 1, shortCount: 1 },
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "퀴즈 생성 실패");
+
+      showToast("퀴즈 생성 완료!");
+
+      const returnTo = window.location.pathname + window.location.search;
+      router.push(`/quiz/take/${data.quizSetId}?returnTo=${encodeURIComponent(returnTo)}`);
+    } catch (e: any) {
+      setMsg(e?.message ?? "퀴즈 생성 중 오류");
+    } finally {
+      setQuizLoading(false);
+    }
   }
 
   return (
@@ -297,9 +370,6 @@ export default function RecordPage() {
             onChange={(e) => {
               const id = e.target.value;
               setSelectedGradeId(id);
-
-              // 아래 subjects/materials 로딩 흐름에서 정리되긴 하는데
-              // UX상 URL도 바로 정리해두면 좋아
               replaceQuery({ gradeId: id, subjectId: "", materialId: "", page: 1 });
             }}
           >
@@ -356,27 +426,43 @@ export default function RecordPage() {
           {materials.length === 0 ? (
             <div className="text-sm text-gray-500">아직 업로드된 PDF가 없어.</div>
           ) : (
-            materials.map((m) => {
-              const active = activeMaterialId === m.id;
-              return (
-                <button
-                  key={m.id}
-                  className={`w-full rounded-lg border p-3 text-left text-sm ${
-                    active ? "border-blue-500 bg-blue-50" : ""
-                  }`}
-                  onClick={() => {
-                    setActiveMaterialId(m.id);
-                    setPage(1);
-                    setDirty(false);
-                    setContent("");
-                    replaceQuery({ materialId: m.id, page: 1 });
-                  }}
-                >
-                  <div className="font-semibold">{m.title}</div>
-                  <div className="text-xs text-gray-500">{m.week}주차</div>
-                </button>
-              );
-            })
+            <div className="space-y-2">
+              {materials.map((m) => {
+                const active = activeMaterialId === m.id;
+                return (
+                  <div
+                    key={m.id}
+                    className={`w-full rounded-lg border p-3 text-left text-sm cursor-pointer ${
+                      active ? "border-blue-500 bg-blue-50" : "hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      setActiveMaterialId(m.id);
+                      setSignedUrl(""); // ✅ 잔상 방지
+                      setPage(1);
+                      setDirty(false);
+                      setContent("");
+                      replaceQuery({ materialId: m.id, page: 1 });
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setActiveMaterialId(m.id);
+                        setSignedUrl("");
+                        setPage(1);
+                        setDirty(false);
+                        setContent("");
+                        replaceQuery({ materialId: m.id, page: 1 });
+                      }
+                    }}
+                  >
+                    <div className="font-semibold">{m.title}</div>
+                    <div className="text-xs text-gray-500">{m.week}주차</div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -391,6 +477,15 @@ export default function RecordPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"
+              disabled={!activeMaterial || quizLoading}
+              onClick={() => setConfirmCreateOpen(true)}
+              title="현재 선택된 자료로 퀴즈를 생성합니다"
+            >
+              {quizLoading ? "생성중..." : "퀴즈 생성"}
+            </button>
+
             <button
               className="rounded-lg border px-3 py-1 text-sm disabled:opacity-50"
               disabled={!activeMaterial || page <= 1}
@@ -409,12 +504,16 @@ export default function RecordPage() {
           </div>
         </div>
 
-        {/* PDF (한 장씩만) */}
+        {/* PDF */}
         <div className="h-[52vh] rounded-lg border overflow-hidden bg-white">
           {!activeMaterial ? (
             <div className="p-4 text-sm text-gray-500">왼쪽에서 PDF를 선택해줘.</div>
+          ) : loadingFileUrl ? (
+            <div className="p-4 text-sm text-gray-500">파일 URL 준비중...</div>
+          ) : !signedUrl ? (
+            <div className="p-4 text-sm text-gray-500">PDF를 불러올 수 없어.(signedUrl 없음)</div>
           ) : (
-            <PdfViewer fileUrl={activeMaterial.fileUrl} page={page} />
+            <PdfViewer fileUrl={signedUrl} page={page} />
           )}
         </div>
 
@@ -449,6 +548,43 @@ export default function RecordPage() {
           </div>
         </div>
       </div>
+
+      {/* ===== 모달: 퀴즈 생성 확인 ===== */}
+      <Modal
+        open={confirmCreateOpen}
+        onClose={() => setConfirmCreateOpen(false)}
+        title="퀴즈 생성"
+        footer={
+          <>
+            <button
+              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              onClick={() => setConfirmCreateOpen(false)}
+              disabled={quizLoading}
+            >
+              취소
+            </button>
+            <button
+              className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              onClick={handleConfirmCreateQuiz}
+              disabled={quizLoading || !activeMaterial}
+            >
+              만들기
+            </button>
+          </>
+        }
+      >
+        <div className="text-sm text-gray-700">퀴즈를 만드시겠습니까?</div>
+      </Modal>
+
+      {/* ===== 로딩 오버레이 ===== */}
+      {quizLoading && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+          <div className="rounded-2xl bg-white px-6 py-4 shadow-lg">
+            <div className="text-sm font-medium">퀴즈 생성 중...</div>
+            <div className="mt-2 text-xs text-gray-500">잠시만 기다려주세요</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
