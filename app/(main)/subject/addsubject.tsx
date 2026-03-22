@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "@/app/components/ui/modal";
-import { AddSubjectAction } from "@/app/(main)/subject/components/subject_action"
+import { AddSubjectAction } from "@/app/(main)/subject/components/subject_action";
 
 type ActionState = { ok: boolean; error?: string } | null;
 
@@ -29,7 +29,7 @@ export default function AddSubject({ selectedGradeId }: { selectedGradeId?: stri
     if (state.ok) {
       setOpen(false);
       setName("");
-      router.refresh(); //  서버 렌더 데이터 최신화
+      router.refresh();
     }
   }, [state, router]);
 
@@ -46,7 +46,7 @@ export default function AddSubject({ selectedGradeId }: { selectedGradeId?: stri
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-gray-50"
+        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
       >
         + 과목 추가
       </button>
@@ -77,20 +77,22 @@ export default function AddSubject({ selectedGradeId }: { selectedGradeId?: stri
           </>
         }
       >
-        <form id="add-subject-form" action={formAction} className="space-y-2">
+        <form id="add-subject-form" action={formAction} className="space-y-3">
           <input type="hidden" name="gradeId" value={selectedGradeId ?? ""} />
 
-          <label className="block text-sm text-gray-600">과목명</label>
-          <input
-            ref={inputRef}
-            name="name"
-            value={name}
-            disabled={isPending}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="예: 데이터베이스"
-            maxLength={50}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-gray-400 focus:ring-4 focus:ring-gray-100 disabled:bg-gray-100"
-          />
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">과목명</label>
+            <input
+              ref={inputRef}
+              name="name"
+              value={name}
+              disabled={isPending}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="예: 데이터베이스"
+              maxLength={50}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 outline-none focus:border-gray-400 focus:ring-4 focus:ring-gray-100 disabled:bg-gray-100"
+            />
+          </div>
 
           {error && (
             <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

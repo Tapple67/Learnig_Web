@@ -1,4 +1,3 @@
-// app/quiz/selectors.tsx
 "use client";
 
 type Grade = { id: string; year: number; term: number; isCurrent: boolean };
@@ -17,91 +16,106 @@ export default function Selectors(props: {
   const { grades, subjects, materials, selected } = props;
 
   return (
-    <div className="border-b bg-white">
-      <div className="mx-auto max-w-6xl p-4">
-        {/* ✅ 모바일에서는 세로, md 이상에서는 3컬럼 가로 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* 학기 */}
-          <section>
-            <div className="text-xs font-semibold text-gray-600 mb-2">학기</div>
-            <div className="flex flex-wrap gap-2">
-              {grades.map((g) => {
-                const active = selected.gradeId === g.id;
-                return (
-                  <button
-                    key={g.id}
-                    onClick={() => props.onSelectGrade(g.id)}
-                    className={[
-                      "rounded-lg border px-3 py-2 text-sm",
-                      active ? "border-blue-600 bg-blue-50" : "bg-white hover:bg-gray-50",
-                    ].join(" ")}
-                  >
-                    {g.year}-{g.term}
-                  </button>
-                );
-              })}
-              {grades.length === 0 && <div className="text-sm text-gray-500">학기가 없습니다.</div>}
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">학기</h2>
+        <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-auto">
+          {grades.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+              학기가 없습니다.
             </div>
-          </section>
-
-          {/* 과목 */}
-          <section>
-            <div className="text-xs font-semibold text-gray-600 mb-2">과목</div>
-            <div className="flex flex-wrap gap-2">
-              {subjects.map((s) => {
-                const active = selected.subjectId === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => props.onSelectSubject(s.id)}
-                    disabled={!selected.gradeId}
-                    className={[
-                      "rounded-lg border px-3 py-2 text-sm",
-                      !selected.gradeId ? "opacity-50 cursor-not-allowed" : "",
-                      active ? "border-blue-600 bg-blue-50" : "bg-white hover:bg-gray-50",
-                    ].join(" ")}
-                  >
-                    {s.name}
-                  </button>
-                );
-              })}
-              {!selected.gradeId && <div className="text-sm text-gray-500">학기를 먼저 선택하세요.</div>}
-              {selected.gradeId && subjects.length === 0 && (
-                <div className="text-sm text-gray-500">과목이 없습니다.</div>
-              )}
-            </div>
-          </section>
-
-          {/* 파일 */}
-          <section>
-            <div className="text-xs font-semibold text-gray-600 mb-2">파일</div>
-            <div className="flex flex-wrap gap-2">
-              {materials.map((m) => {
-                const active = selected.materialId === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => props.onSelectMaterial(m.id)}
-                    disabled={!selected.subjectId}
-                    className={[
-                      "rounded-lg border px-3 py-2 text-sm",
-                      !selected.subjectId ? "opacity-50 cursor-not-allowed" : "",
-                      active ? "border-blue-600 bg-blue-50" : "bg-white hover:bg-gray-50",
-                    ].join(" ")}
-                    title={m.title}
-                  >
-                    {m.week}주차
-                  </button>
-                );
-              })}
-              {!selected.subjectId && <div className="text-sm text-gray-500">과목을 먼저 선택하세요.</div>}
-              {selected.subjectId && materials.length === 0 && (
-                <div className="text-sm text-gray-500">파일이 없습니다.</div>
-              )}
-            </div>
-          </section>
+          ) : (
+            grades.map((g) => {
+              const active = selected.gradeId === g.id;
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => props.onSelectGrade(g.id)}
+                  className={[
+                    "block w-full rounded-xl border px-3 py-2 text-left text-sm transition",
+                    "focus:outline-none focus:ring-2 focus:ring-slate-200",
+                    active
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+                  ].join(" ")}
+                >
+                  {g.year}-{g.term}
+                </button>
+              );
+            })
+          )}
         </div>
-      </div>
+      </section>
+
+      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">과목</h2>
+        <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-auto">
+          {!selected.gradeId ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+              학기를 선택하세요
+            </div>
+          ) : subjects.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+              과목이 없습니다.
+            </div>
+          ) : (
+            subjects.map((s) => {
+              const active = selected.subjectId === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => props.onSelectSubject(s.id)}
+                  className={[
+                    "block w-full rounded-xl border px-3 py-2 text-left text-sm transition",
+                    "focus:outline-none focus:ring-2 focus:ring-slate-200",
+                    active
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+                  ].join(" ")}
+                >
+                  {s.name}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </section>
+
+      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">파일</h2>
+        <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-auto">
+          {!selected.subjectId ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+              과목을 선택하세요.
+            </div>
+          ) : materials.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+              파일이 없습니다.
+            </div>
+          ) : (
+            materials.map((m) => {
+              const active = selected.materialId === m.id;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => props.onSelectMaterial(m.id)}
+                  className={[
+                    "block w-full rounded-xl border px-3 py-2 text-left text-sm transition",
+                    "focus:outline-none focus:ring-2 focus:ring-slate-200",
+                    active
+                      ? "border-blue-500 bg-blue-50 text-blue-900"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+                  ].join(" ")}
+                  title={m.title}
+                >
+                  <div className="font-medium">{m.title}</div>
+                  <div className="mt-1 text-xs opacity-80">{m.week}주차</div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </section>
     </div>
   );
 }

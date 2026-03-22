@@ -44,7 +44,7 @@ export default function DeleteSubject({
         type="button"
         onClick={() => setOpen(true)}
         disabled={!selectedSubjectId}
-        className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         과목 삭제
       </button>
@@ -78,9 +78,10 @@ export default function DeleteSubject({
         <form id="delete-subject-form" action={formAction} className="space-y-3">
           <input type="hidden" name="subjectId" value={selectedSubjectId ?? ""} />
 
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            선택된 과목을 삭제할까요? <br />
-            관련 데이터(노트/퀴즈/파일 등)도 함께 삭제될 수 있어요.
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">
+            선택한 과목을 삭제할까요?
+            <br />
+            연결된 자료와 관련 데이터도 함께 삭제될 수 있어요.
           </div>
 
           {error && (

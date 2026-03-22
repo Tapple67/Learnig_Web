@@ -34,10 +34,25 @@ export default async function SubjectPage({
       })
     : [];
 
+  const materials = selectedSubjectId
+    ? await prisma.material.findMany({
+        where: {
+          subjectId: selectedSubjectId,
+          subject: {
+            gradeId: selectedGradeId,
+            grade: { userId },
+          },
+        },
+        orderBy: [{ week: "asc" }, { createdAt: "asc" }],
+        select: { id: true, week: true, title: true },
+      })
+    : [];
+
   return (
     <Combi
       grades={grades}
       subjects={subjects}
+      materials={materials}
       selectedGradeId={selectedGradeId}
       selectedSubjectId={selectedSubjectId}
     />

@@ -193,7 +193,7 @@ export default function QuizResultPage({ params }: { params: { attemptId: string
             </div>
           </div>
 
-            <button onClick={() => router.replace(returnTo)}>돌아가기</button>
+            <button className="text-sm text-slate-300" onClick={() => router.replace(returnTo)}>돌아가기</button>
         </div>
 
         {/* 문제 카드(한 문제씩) */}
@@ -203,7 +203,7 @@ export default function QuizResultPage({ params }: { params: { attemptId: string
               {current.order}. ({current.points}점)
             </div>
             <div className="text-sm">
-              {isCorrect === true ? "✅ 정답" : isCorrect === false ? "❌ 오답" : ""}
+              {isCorrect === true ? " 정답" : isCorrect === false ? " 오답" : ""}
               <span className="ml-2 opacity-90">
                 {earned}/{current.points}점
               </span>
@@ -212,7 +212,7 @@ export default function QuizResultPage({ params }: { params: { attemptId: string
 
           <div className="mt-2 text-base font-medium leading-relaxed">{current.question}</div>
 
-          {/* ✅ MCQ: 박스 제거하고 보기 자체를 색으로 표시 */}
+          {/*  MCQ: 박스 제거하고 보기 자체를 색으로 표시 */}
           {current.type === "mcq" && Array.isArray(current.choices) && (
             <div className="mt-5 space-y-2">
               {(current.choices as string[]).map((c, i) => (
@@ -239,7 +239,7 @@ export default function QuizResultPage({ params }: { params: { attemptId: string
             </div>
           )}
 
-          {/* ✅ OX(tf): 동일 처리 */}
+          {/*  OX(tf): 동일 처리 */}
           {current.type === "tf" && (
             <div className="mt-5 flex gap-3">
               <div
@@ -265,7 +265,7 @@ export default function QuizResultPage({ params }: { params: { attemptId: string
             </div>
           )}
 
-          {/* ✅ 서술형(short): 기존처럼 박스로 유지 */}
+          {/*  서술형(short): 기존처럼 박스로 유지 */}
           {current.type === "short" && (
             <div className="mt-6 grid gap-3">
               <div className="rounded-lg bg-slate-900/60 p-4">
