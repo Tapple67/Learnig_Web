@@ -22,6 +22,7 @@ const QuizItemSchema = z.object({
   choices: z.array(z.string()).optional().nullable(),
   answerKey: z.any(),
   explanation: z.string().min(1),
+  topic: z.string().optional().nullable(),
   points: z.number().int().min(1).optional(),
 });
 
@@ -114,6 +115,7 @@ ${summary}
   const normalized = {
     ...it,
     choices: it.choices ?? null, // ✅ undefined -> null
+    topic: it.topic?.trim() || "기타 개념",
     points: it.points ?? 1,
   };
 

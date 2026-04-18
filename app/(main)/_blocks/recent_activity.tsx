@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/auth";
 import BlockShell from "./block_shell";
@@ -30,7 +30,6 @@ export default async function RecentActivity() {
   const userId = await getUserId();
   if (!userId) return null;
 
-  // NOTE: 묶기 때문에 조금 넉넉히 가져옴
   const rows: Row[] = await prisma.activityLog.findMany({
     where: { userId },
     orderBy: { updatedAt: "desc" },
@@ -49,7 +48,6 @@ export default async function RecentActivity() {
     },
   });
 
-  // materialId 기준 NOTE_EDIT 묶기
   const noteGroup = new Map<
     string,
     {
@@ -71,83 +69,96 @@ export default async function RecentActivity() {
     updatedAt: Date;
   }> = [];
 
-  for (const r of rows) {
-    if (r.type !== "NOTE_EDIT") {
+  for (const row of rows) {
+    if (row.type !== "NOTE_EDIT") {
       singles.push({
-        key: r.id,
-        title: r.title,
-        href: hrefRecord({ gradeId: r.gradeId, subjectId: r.subjectId, materialId: r.materialId, page: r.page ?? 1 }),
-        updatedAt: r.updatedAt,
+        key: row.id,
+        title: row.title,
+        href: hrefRecord({
+          gradeId: row.gradeId,
+          subjectId: row.subjectId,
+          materialId: row.materialId,
+          page: row.page ?? 1,
+        }),
+        updatedAt: row.updatedAt,
       });
       continue;
     }
 
-    const p = r.page ?? 1;
-    const g = noteGroup.get(r.materialId);
-    if (!g) {
-      noteGroup.set(r.materialId, {
-        gradeId: r.gradeId,
-        subjectId: r.subjectId,
-        subjectName: r.subjectName,
-        materialId: r.materialId,
-        materialTitle: r.materialTitle,
-        updatedAt: r.updatedAt,
-        latestPage: p,
-        pages: new Set([p]),
+    const page = row.page ?? 1;
+    const grouped = noteGroup.get(row.materialId);
+
+    if (!grouped) {
+      noteGroup.set(row.materialId, {
+        gradeId: row.gradeId,
+        subjectId: row.subjectId,
+        subjectName: row.subjectName,
+        materialId: row.materialId,
+        materialTitle: row.materialTitle,
+        updatedAt: row.updatedAt,
+        latestPage: page,
+        pages: new Set([page]),
       });
-    } else {
-      g.pages.add(p);
-      if (r.updatedAt > g.updatedAt) {
-        g.updatedAt = r.updatedAt;
-        g.latestPage = p;
-        g.subjectName = r.subjectName;
-        g.materialTitle = r.materialTitle;
-        g.gradeId = r.gradeId;
-        g.subjectId = r.subjectId;
-      }
+      continue;
+    }
+
+    grouped.pages.add(page);
+    if (row.updatedAt > grouped.updatedAt) {
+      grouped.updatedAt = row.updatedAt;
+      grouped.latestPage = page;
+      grouped.subjectName = row.subjectName;
+      grouped.materialTitle = row.materialTitle;
+      grouped.gradeId = row.gradeId;
+      grouped.subjectId = row.subjectId;
     }
   }
 
-  const grouped = Array.from(noteGroup.values()).map((g) => {
-    const extra = g.pages.size - 1;
+  const groupedRows = Array.from(noteGroup.values()).map((item) => {
+    const extraCount = item.pages.size - 1;
     const title =
-      extra <= 0
-        ? `${g.subjectName} - ${g.materialTitle} (p.${g.latestPage}) 노트 수정`
-        : `${g.subjectName} - ${g.materialTitle} (p.${g.latestPage} 외 ${extra}페이지) 노트 수정`;
+      extraCount <= 0
+        ? `${item.subjectName} - ${item.materialTitle} (p.${item.latestPage}) 노트 수정`
+        : `${item.subjectName} - ${item.materialTitle} (p.${item.latestPage} 외 ${extraCount}페이지) 노트 수정`;
 
     return {
-      key: `note:${g.materialId}`,
+      key: `note:${item.materialId}`,
       title,
       href: hrefRecord({
-        gradeId: g.gradeId,
-        subjectId: g.subjectId,
-        materialId: g.materialId,
-        page: g.latestPage,
+        gradeId: item.gradeId,
+        subjectId: item.subjectId,
+        materialId: item.materialId,
+        page: item.latestPage,
       }),
-      updatedAt: g.updatedAt,
+      updatedAt: item.updatedAt,
     };
   });
 
-  const final = [...singles, ...grouped]
+  const finalRows = [...singles, ...groupedRows]
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .slice(0, 5);
 
   return (
-    <BlockShell title="최근 활동">
-      {final.length === 0 ? (
-        <p className="text-sm text-gray-500">최근 활동이 없습니다.</p>
+    <BlockShell
+      title="최근 활동"
+      className="h-full rounded-3xl border-slate-200 bg-white p-6 shadow-md shadow-slate-200/70"
+      bodyClassName="space-y-3"
+    >
+      {finalRows.length === 0 ? (
+        <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          최근 활동이 없습니다.
+        </p>
       ) : (
         <ul className="space-y-2">
-          {final.map((a) => (
+          {finalRows.map((activity) => (
             <li
-              key={a.key}
-              className="flex items-center justify-between gap-3 rounded-lg border p-2 hover:bg-gray-50"
+              key={activity.key}
+              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-sky-200 hover:bg-sky-50"
             >
-              <Link href={a.href} className="min-w-0 flex-1 truncate text-sm hover:underline">
-                {a.title}
+              <Link href={activity.href} className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700 hover:text-sky-700">
+                {activity.title}
               </Link>
-              <span className="shrink-0 text-xs text-gray-400">
-                {new Date(a.updatedAt).toLocaleDateString("ko-KR")}
+              <span className="shrink-0 text-xs text-slate-500">
+                {new Date(activity.updatedAt).toLocaleDateString("ko-KR")}
               </span>
             </li>
           ))}

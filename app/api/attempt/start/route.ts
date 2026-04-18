@@ -62,7 +62,7 @@ export async function POST(req: Request) {
         title: true,
         items: {
           orderBy: { order: "asc" },
-          select: { id: true, order: true, type: true, question: true, choices: true, points: true },
+          select: { id: true, order: true, type: true, question: true, choices: true, topic: true, points: true },
         },
       },
     });

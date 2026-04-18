@@ -11,6 +11,7 @@ type QuizItemClient = {
   type: "mcq" | "tf" | "short" | string;
   question: string;
   choices: any;
+  topic: string;
   points: number;
 };
 

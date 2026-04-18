@@ -192,7 +192,8 @@ model QuizItem {
   question    String  @db.Text
   choices     Json? // mcq: string[] / tf: ["O","X"] 같이 저장 가능
   answerKey   Json // 정답: 타입별 구조
-  explanation String? @db.Text // ✅ 해설
+  explanation String? @db.Text //  해설
+  topic       String?
   points      Int     @default(1)
 
   createdAt DateTime @default(now())
@@ -201,6 +202,7 @@ model QuizItem {
   answers QuizAnswer[]
 
   @@index([quizSetId, order])
+  @@index([topic])
 }
 
 model QuizAttempt {

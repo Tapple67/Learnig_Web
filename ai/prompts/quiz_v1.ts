@@ -15,6 +15,15 @@ export function buildQuizPrompt(summaryMarkdown: string, spec: QuizGenSpec) {
 - 출력은 반드시 JSON 하나만 출력(설명 텍스트 금지).
 - 문항 타입은 mcq / tf / short만.
 - 각 문항에 explanation(해설) 필수.
+
+- topic은 이 문항이 다루는 핵심 개념/주제를 짧고 명확하게 한글로 작성
+예:
+  - 프로세스 상태 전이
+  - cpu 스케줄링
+  - 정규화
+
+topic은 너무 넓지 않게 "이 주제를 점검 해보세요" 라고 할 정도로 작성
+
 - 정답은 answerKey로 표현한다.
   - mcq: { "correctIndex": number }  (0-based)
   - tf:  { "correct": true|false }
@@ -35,6 +44,7 @@ JSON 스키마:
       "choices": string[] | null,
       "answerKey": object,
       "explanation": string,
+      "topic": string,
       "points": number
     }
   ]

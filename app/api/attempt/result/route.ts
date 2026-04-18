@@ -31,6 +31,7 @@ export async function GET(req: Request) {
             select: {
               id: true, order: true, type: true,
               question: true, choices: true, points: true,
+              topic:true,
               explanation: true,
               answerKey: true, // 결과 화면에서 정답 표시 필요하면 사용
             },

@@ -24,6 +24,7 @@ export async function generateAndSaveQuiz(params: {
     question: it.question,
     answerKey: it.answerKey as Prisma.InputJsonValue,
     explanation: it.explanation ?? "",
+    topic: it.topic?.trim() || "기타 개념",
     points: it.points ?? 1,
   };
 

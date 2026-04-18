@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Selectors from "./selectors";
 import QuizSetList from "./quiz_list";
 import Modal from "@/app/components/ui/modal";
+import MaterialStatsModal from "@/app/(main)/stats/material_stats_modal";
 
 type Grade = { id: string; year: number; term: number; isCurrent: boolean };
 type Subject = { id: string; name: string; isCurrent: boolean; gradeId: string };
@@ -41,6 +42,7 @@ export default function QuizShell(props: {
   const [confirmCreateOpen, setConfirmCreateOpen] = useState(false);
   const [createdChoiceOpen, setCreatedChoiceOpen] = useState(false);
   const [createdQuizSetId, setCreatedQuizSetId] = useState<string | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   function pushWith(next: { gradeId?: string; subjectId?: string; materialId?: string }) {
     const p = new URLSearchParams();
@@ -112,6 +114,14 @@ export default function QuizShell(props: {
             <div className="truncate text-xs text-slate-500">{breadcrumb}</div>
             <h1 className="text-base font-semibold tracking-tight text-slate-900">Quiz</h1>
           </div>
+
+          <button
+            onClick={() => setStatsOpen(true)}
+            disabled={!selected.materialId}
+            className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+          >
+            통계
+          </button>
 
           <button
             onClick={() => setConfirmCreateOpen(true)}
@@ -215,6 +225,12 @@ export default function QuizShell(props: {
           <div className="text-xs text-gray-500">지금 풀거나 나중에 풀수 있습니다.</div>
         </div>
       </Modal>
+
+      <MaterialStatsModal
+      materialId={selected.materialId ?? ""}
+      open={statsOpen}
+      onClose={() => setStatsOpen(false)}
+      />
     </div>
   );
 }

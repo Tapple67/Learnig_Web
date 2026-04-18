@@ -15,6 +15,7 @@ export type QuizResult = {
     choices: string[] | null;
     answerKey: any;
     explanation: string;
+    topic?: string | null;
     points?: number;
   }>;
   provider: string;
