@@ -3,139 +3,199 @@
 import { useEffect, useRef, useState } from "react";
 
 type Props = {
-  fileUrl: string; // signedUrl
+  fileUrl: string;
   page: number;
-  onNumPages?: (n: number) => void;
+  zoom: number;
+  onLoadStateChange?: (state: "idle" | "loading" | "success" | "error") => void;
+  onErrorMessage?: (message: string) => void;
 };
 
-export default function PdfViewer({ fileUrl, page, onNumPages }: Props) {
+declare global {
+  interface Window {
+    pdfjsLib: any;
+  }
+}
+
+export default function PdfViewer({
+  fileUrl,
+  page,
+  zoom,
+  onLoadStateChange,
+  onErrorMessage,
+}: Props) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const pdfRef = useRef<any>(null); // PDFDocumentProxy
+  const pdfRef = useRef<any>(null);
   const renderTaskRef = useRef<any>(null);
   const loadSeqRef = useRef(0);
 
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const [docKey, setDocKey] = useState(0); // 문서 로드 완료 트리거
+  const [pdfReady, setPdfReady] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  // ✅ 1) PDF 로드(파일 바뀔 때만)
   useEffect(() => {
-    if (!fileUrl) {
-      pdfRef.current = null;
-      setErr("");
-      setLoading(false);
-      return;
+    const updateWidth = () => {
+      if (!wrapperRef.current) return;
+      setContainerWidth(wrapperRef.current.clientWidth);
+    };
+
+    updateWidth();
+    window.addEventListener("resize", updateWidth);
+    return () => window.removeEventListener("resize", updateWidth);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPdfJs() {
+      try {
+        if (window.pdfjsLib) {
+          setPdfReady(true);
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.src =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+        script.async = true;
+
+        script.onload = () => {
+          if (cancelled) return;
+          if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+              "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+            setPdfReady(true);
+          }
+        };
+
+        script.onerror = () => {
+          if (cancelled) return;
+          onLoadStateChange?.("error");
+          onErrorMessage?.("pdf.js 라이브러리를 불러오지 못했습니다.");
+        };
+
+        document.body.appendChild(script);
+      } catch {
+        onLoadStateChange?.("error");
+        onErrorMessage?.("PDF 뷰어 초기화 중 오류가 발생했습니다.");
+      }
     }
 
-    let canceled = false;
-    const seq = ++loadSeqRef.current;
+    loadPdfJs();
 
-    (async () => {
-      setErr("");
-      setLoading(true);
+    return () => {
+      cancelled = true;
+    };
+  }, [onErrorMessage, onLoadStateChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function renderPdf() {
+      if (
+        !pdfReady ||
+        !fileUrl ||
+        !canvasRef.current ||
+        !window.pdfjsLib ||
+        !containerWidth
+      ) {
+        return;
+      }
+
+      const seq = ++loadSeqRef.current;
+      onLoadStateChange?.("loading");
+      onErrorMessage?.("");
 
       try {
-        // pdfjs는 브라우저에서만 동적 import
-        const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
+        if (renderTaskRef.current) {
+          try {
+            renderTaskRef.current.cancel();
+          } catch {}
+          renderTaskRef.current = null;
+        }
 
-        // ✅ worker 설정: public에 pdf.worker.min.js 가 있어야 함
-        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
+        let pdf = pdfRef.current;
 
-        // 이전 렌더 취소
-        try {
-          renderTaskRef.current?.cancel?.();
-        } catch {}
+        if (!pdf || pdfRef.current?._src !== fileUrl) {
+          const loadingTask = window.pdfjsLib.getDocument(fileUrl);
+          pdf = await loadingTask.promise;
+          pdf._src = fileUrl;
+          pdfRef.current = pdf;
+        }
 
-        // ✅ signedUrl을 우리가 직접 fetch해서 data로 넘기기 (CORS/Range 이슈 감소)
-        const res = await fetch(fileUrl, { cache: "no-store" });
-        if (!res.ok) throw new Error(`PDF 다운로드 실패 (${res.status})`);
-        const ab = await res.arrayBuffer();
-        if (canceled || seq !== loadSeqRef.current) return;
+        if (cancelled || seq !== loadSeqRef.current) return;
 
-        const loadingTask = pdfjs.getDocument({
-          data: new Uint8Array(ab),
-          // Supabase 환경에서 더 안정적으로(필요 시)
-          disableAutoFetch: true,
-          disableStream: true,
-          disableRange: true,
+        const safePage = Math.max(1, page);
+        const pageObj = await pdf.getPage(safePage);
+
+        if (cancelled || seq !== loadSeqRef.current) return;
+
+        const baseViewport = pageObj.getViewport({ scale: 1 });
+        const horizontalPadding = 32;
+        const fitWidth = Math.max(300, containerWidth - horizontalPadding);
+        const fitScale = fitWidth / baseViewport.width;
+
+        const finalScale = Math.max(0.2, Math.min(4, fitScale * zoom));
+        const viewport = pageObj.getViewport({ scale: finalScale });
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const context = canvas.getContext("2d");
+        if (!context) {
+          onLoadStateChange?.("error");
+          onErrorMessage?.("캔버스를 초기화할 수 없습니다.");
+          return;
+        }
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
+
+        const renderTask = pageObj.render({
+          canvasContext: context,
+          viewport,
         });
 
-        const pdf = await loadingTask.promise;
-        if (canceled || seq !== loadSeqRef.current) return;
-
-        pdfRef.current = pdf;
-        onNumPages?.(pdf.numPages);
-
-        // ✅ 문서 로드가 끝났다는 트리거(이걸로 첫 렌더가 무조건 실행됨)
-        setDocKey((k) => k + 1);
-      } catch (e: any) {
-        if (!canceled) setErr(e?.message ?? "PDF 로드 실패");
-        pdfRef.current = null;
-      } finally {
-        if (!canceled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      canceled = true;
-      try {
-        renderTaskRef.current?.cancel?.();
-      } catch {}
-    };
-  }, [fileUrl, onNumPages]);
-
-  // ✅ 2) 현재 페이지 렌더 (page 또는 문서 로드 완료 시)
-  useEffect(() => {
-    let canceled = false;
-
-    (async () => {
-      const pdf = pdfRef.current;
-      const canvas = canvasRef.current;
-      if (!pdf || !canvas) return;
-
-      setErr("");
-
-      try {
-        // 이전 렌더 취소(연속 클릭 대비)
-        try {
-          renderTaskRef.current?.cancel?.();
-        } catch {}
-
-        const safePage = Math.max(1, Math.min(page, pdf.numPages));
-        const pdfPage = await pdf.getPage(safePage);
-        if (canceled) return;
-
-        const viewport = pdfPage.getViewport({ scale: 1.5 });
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-
-        const renderTask = pdfPage.render({ canvasContext: ctx, viewport });
         renderTaskRef.current = renderTask;
-
         await renderTask.promise;
-      } catch (e: any) {
-        if (!canceled) setErr(e?.message ?? "PDF 렌더 실패");
+
+        if (cancelled || seq !== loadSeqRef.current) return;
+
+        onLoadStateChange?.("success");
+      } catch (err: any) {
+        if (err?.name === "RenderingCancelledException") return;
+
+        onLoadStateChange?.("error");
+
+        if (err?.message?.includes("Missing PDF")) {
+          onErrorMessage?.("PDF 파일을 찾을 수 없습니다.");
+        } else if (err?.message?.includes("Unexpected server response")) {
+          onErrorMessage?.("PDF 주소가 만료되었거나 접근할 수 없습니다.");
+        } else {
+          onErrorMessage?.("PDF를 표시하는 중 오류가 발생했습니다.");
+        }
       }
-    })();
+    }
+
+    renderPdf();
 
     return () => {
-      canceled = true;
-      try {
-        renderTaskRef.current?.cancel?.();
-      } catch {}
+      cancelled = true;
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch {}
+      }
     };
-  }, [page, docKey]); // ✅ docKey로 “문서 로드 후 첫 렌더” 보장
+  }, [pdfReady, fileUrl, page, zoom, containerWidth, onErrorMessage, onLoadStateChange]);
 
   return (
-    <div className="h-full w-full overflow-auto flex items-start justify-center p-2 bg-white">
-      {loading && <div className="text-sm text-gray-600">PDF 로딩 중...</div>}
-      {err && <div className="text-sm text-red-600">PDF 로딩 실패: {err}</div>}
-      {!loading && !err && (
-        <canvas ref={canvasRef} className="max-w-full h-auto border rounded" />
-      )}
+    <div
+      ref={wrapperRef}
+      className="flex h-full w-full items-start justify-center overflow-auto bg-white p-4"
+    >
+      <canvas ref={canvasRef} className="block max-w-none h-auto shadow-sm" />
     </div>
   );
 }
