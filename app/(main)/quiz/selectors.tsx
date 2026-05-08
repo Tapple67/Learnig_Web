@@ -14,35 +14,41 @@ export default function Selectors(props: {
   onSelectMaterial: (materialId: string) => void;
 }) {
   const { grades, subjects, materials, selected } = props;
+  const orderedGrades = [...grades].sort((a, b) => {
+    if (a.term !== b.term) return a.term - b.term;
+    return a.year - b.year;
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <section className="flex flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
         <h2 className="text-sm font-semibold text-slate-900">학기</h2>
-        <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-auto">
+        <div className="mt-2">
           {grades.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
               학기가 없습니다.
             </div>
           ) : (
-            grades.map((g) => {
-              const active = selected.gradeId === g.id;
-              return (
-                <button
-                  key={g.id}
-                  onClick={() => props.onSelectGrade(g.id)}
-                  className={[
-                    "block w-full rounded-xl border px-3 py-2 text-left text-sm transition",
-                    "focus:outline-none focus:ring-2 focus:ring-slate-200",
-                    active
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
-                  ].join(" ")}
-                >
-                  {g.year}-{g.term}
-                </button>
-              );
-            })
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {orderedGrades.map((g) => {
+                const active = selected.gradeId === g.id;
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => props.onSelectGrade(g.id)}
+                    className={[
+                      "block w-full rounded-xl border px-2 py-2 text-center text-xs font-medium transition sm:text-sm",
+                      "focus:outline-none focus:ring-2 focus:ring-slate-200",
+                      active
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+                    ].join(" ")}
+                  >
+                    {g.year}-{g.term}
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       </section>

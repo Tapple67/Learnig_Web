@@ -86,6 +86,8 @@ model Note {
   materialId String
   page       Int
   content    String   @default("")
+  signals    Json?
+  signalsVer String?
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 
@@ -150,6 +152,10 @@ model MaterialSummary {
   materialId    String   @unique
   sourceHash    String
   content       String   @db.Text
+  canonical     String?  @db.Text
+  adaptive      String?  @db.Text
+  summaryType   String?
+  signalsDigest String?
   provider      String?
   model         String?
   promptVersion String?
@@ -195,6 +201,8 @@ model QuizItem {
   explanation String? @db.Text //  해설
   topic       String?
   points      Int     @default(1)
+  evidence    Json?
+  signalHits  Json?
 
   createdAt DateTime @default(now())
 

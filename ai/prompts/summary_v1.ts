@@ -1,37 +1,34 @@
-export const SUMMARY_PROMPT_VERSION = "summary_v1";
+﻿export const SUMMARY_PROMPT_VERSION = "summary_v3";
 
 export function buildSummaryPrompt(input: {
   title: string;
   week: number;
-  pages: { page: number; pdfText: string; note: string }[];
+  pages: { page: number; pdfText: string; note: string; noteSignals?: unknown }[];
 }) {
   return `
-너는 대학생 학습 도우미다.
-아래 입력은 "PDF 원문 텍스트"와 "사용자 메모"다.
+너는 학습 정리 도우미다.
+PDF 텍스트와 사용자 메모를 기반으로 한국어 요약을 생성하라.
 
-규칙(매우 중요):
-1) 사실/근거는 PDF 텍스트를 우선한다.
-2) 메모는 '강조 포인트/관점/질문/헷갈린 부분'으로 반영한다.
-3) 메모 내용이 PDF에서 확인되지 않으면 "메모 기반(원문에서 확인 불가)"라고 표시한다.
-4) 핵심 bullet마다 가능한 한 (p.X) 출처를 붙인다.
-5) 출력은 아래 형식을 정확히 따른다.
+규칙:
+1) 사실 근거는 PDF 텍스트를 우선한다.
+2) 메모의 의도 신호(어려움/쉽게 설명/시험 출제 우선/헷갈림)를 요약 스타일과 강조점에 반영한다.
+3) 메모 내용이 PDF에서 검증되지 않으면 "메모 기반(원문 검증 불가)"라고 명시한다.
+4) 가능한 경우 각 bullet에 (p.페이지번호)를 붙인다.
+5) 질문형 문장으로 끝내지 말고, 설명형/정리형 문장으로 작성한다.
+6) 출력은 반드시 한국어로만 작성한다.
 
-[출력 형식]
-# {주차}주차 요약: {제목}
-## 핵심 개념(5~10개)
+출력 형식:
+# ${input.week}주차 요약: ${input.title}
+## 핵심 개념
 - (p.?) ...
-## 사용자가 강조한 포인트(메모 반영)
+## 사용자 메모 반영 포인트
 - (p.?) ...
-## 헷갈리기 쉬운/오개념 주의
+## 쉽게 설명이 필요한 개념
 - (p.?) ...
-## 시험/퀴즈 포인트
+## 퀴즈 출제 포인트
 - (p.?) ...
 
-[입력]
-제목: ${input.title}
-주차: ${input.week}
-
-페이지들(JSON):
+입력 페이지(JSON):
 ${JSON.stringify(input.pages, null, 2)}
 `.trim();
 }

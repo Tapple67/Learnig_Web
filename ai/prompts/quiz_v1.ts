@@ -1,4 +1,4 @@
-export const QUIZ_PROMPT_VERSION = "quiz_v1";
+﻿export const QUIZ_PROMPT_VERSION = "quiz_v3";
 
 export type QuizGenSpec = {
   mcqCount: number;
@@ -6,33 +6,39 @@ export type QuizGenSpec = {
   shortCount: number;
 };
 
-export function buildQuizPrompt(summaryMarkdown: string, spec: QuizGenSpec) {
+export function buildQuizPrompt(
+  summaryMarkdown: string,
+  notesContext: Array<{ page: number; note: string; signals: unknown }>,
+  spec: QuizGenSpec
+) {
   return `
-너는 시험 문제를 만드는 출제자다.
-아래 "정리본"을 기반으로 퀴즈를 만든다.
+JSON만 출력해서 퀴즈를 생성해라.
+입력으로 제공된 요약과 사용자 메모를 함께 사용해라.
 
 규칙:
-- 출력은 반드시 JSON 하나만 출력(설명 텍스트 금지).
-- 문항 타입은 mcq / tf / short만.
-- 각 문항에 explanation(해설) 필수.
+- 유효한 JSON 객체 하나만 출력한다.
+- 문항 타입은 mcq, tf, short만 허용한다.
+- 모든 문항은 explanation, topic, points를 포함해야 한다.
+- 모든 문항은 evidence를 포함해야 한다:
+  { "source": "note"|"mixed"|"pdf", "page": number, "quote": string }
+- 모든 문항은 signalHits: string[]를 포함해야 한다.
+- 메모가 존재하면 전체 문항의 최소 60%는 source가 note 또는 mixed여야 한다.
+- 질문, 선택지, 해설, 주제명은 반드시 한국어로 작성한다.
+- 문항은 반드시 학습 내용(개념/정의/원리/비교/적용)을 묻는 형태로 작성한다.
+- 자료 자체를 묻는 메타 질문은 금지한다.
+  - 금지 예: "어디 페이지가 중요한가요?", "어떤 페이지를 봐야 하나요?"
+- 질문/선택지/해설에 꺾쇠(< >) 같은 플레이스홀더 표기는 절대 사용하지 않는다.
+- 문항 본문은 구체 명사(개념명, 용어명)를 포함하고, "이것/저것/어디" 같은 모호 지시어만으로 구성하지 않는다.
 
-- topic은 이 문항이 다루는 핵심 개념/주제를 짧고 명확하게 한글로 작성
-예:
-  - 프로세스 상태 전이
-  - cpu 스케줄링
-  - 정규화
+정답 형식:
+- mcq: { "correctIndex": number }
+- tf: { "correct": true|false }
+- short: { "accepted": string[] }
 
-topic은 너무 넓지 않게 "이 주제를 점검 해보세요" 라고 할 정도로 작성
-
-- 정답은 answerKey로 표현한다.
-  - mcq: { "correctIndex": number }  (0-based)
-  - tf:  { "correct": true|false }
-  - short: { "accepted": string[] }  // 정답 후보 여러개 가능, 짧게
-- 각 items는 반드시 choices 필드를 포함해야 한다.
-  - mcq: choices는 string[] (4개 고정)
-  - tf: choices는 ["O","X"]
-  - short: choices는 null
-
+선택지 형식:
+- mcq: 보기 4개(string[])
+- tf: ["O","X"]
+- short: null
 
 JSON 스키마:
 {
@@ -45,17 +51,22 @@ JSON 스키마:
       "answerKey": object,
       "explanation": string,
       "topic": string,
-      "points": number
+      "points": number,
+      "evidence": { "source": "note"|"mixed"|"pdf", "page": number, "quote": string },
+      "signalHits": string[]
     }
   ]
 }
 
 문항 수:
-- mcq ${spec.mcqCount}개
-- tf ${spec.tfCount}개
-- short ${spec.shortCount}개
+- mcq ${spec.mcqCount}
+- tf ${spec.tfCount}
+- short ${spec.shortCount}
 
-[정리본]
+[요약]
 ${summaryMarkdown}
+
+[메모]
+${JSON.stringify(notesContext, null, 2)}
 `.trim();
 }

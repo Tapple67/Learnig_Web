@@ -111,7 +111,7 @@ export default function MaterialStatsView(props: { data: MaterialStatsResponse }
                   <div key={t.attemptId} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
                     <div className="text-xs text-slate-500">최근 시도 {data.trend.length - idx}</div>
                     <div className="mt-1 text-sm font-semibold text-slate-900">
-                      {t.score}/{t.maxScore} ({t.accuracy}%)
+                      {t.score}/{t.maxScore} ({t.accuracy}점)
                     </div>
                   </div>
                 ))}

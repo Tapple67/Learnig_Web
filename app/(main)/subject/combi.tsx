@@ -42,6 +42,45 @@ export default function Combi({
     );
   };
 
+  async function uploadMaterial(file: File): Promise<{ ok: boolean; error?: string }> {
+    if (!selectedSubjectId) {
+      return { ok: false, error: "먼저 과목을 선택해주세요." };
+    }
+
+    if (file.type !== "application/pdf") {
+      return { ok: false, error: "PDF 파일만 업로드할 수 있어요." };
+    }
+
+    const nextWeek = materials.length === 0 ? 1 : Math.max(...materials.map((m) => m.week)) + 1;
+    const titleInput = window.prompt("자료 이름", `${nextWeek}주차 자료`) ?? "";
+    const finalTitle = titleInput.trim() || `${nextWeek}주차 자료`;
+    const weekInput = window.prompt("몇 주차 자료인지 입력하세요", String(nextWeek)) ?? "";
+    const finalWeek = Math.max(1, Number(weekInput) || nextWeek);
+
+    const form = new FormData();
+    form.append("subjectId", selectedSubjectId);
+    form.append("week", String(finalWeek));
+    form.append("title", finalTitle);
+    form.append("file", file);
+
+    try {
+      const res = await fetch("/api/materials", {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        return { ok: false, error: data?.error ?? `업로드 실패 (${res.status})` };
+      }
+
+      router.refresh();
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "업로드 중 네트워크 오류가 발생했습니다." };
+    }
+  }
+
   return (
     <div className="bg-slate-50 px-3 py-3 text-slate-900 sm:px-4">
       <div className="mx-auto flex h-[calc(100vh-110px)] max-w-7xl flex-col gap-3">
@@ -70,6 +109,7 @@ export default function Combi({
             materials={materials}
             selectedSubjectId={selectedSubjectId}
             onOpenMaterial={openMaterialRecord}
+            onUploadMaterial={uploadMaterial}
           />
         </div>
       </div>

@@ -54,13 +54,15 @@ export default function LoginPage() {
             <p className="mb-3 inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold tracking-[0.14em] text-sky-700">
               LEARNING WEB
             </p>
-            <h1 className="text-4xl font-semibold leading-tight text-slate-900">
-              학습을 더 간단하고,
+            <h1 className="text-5xl font-semibold leading-tight text-slate-900">
+              On Re:Learn
               <br />
-              더 명확하게
             </h1>
+            <h2 className="text-2xl font-semibold leading-tight text-slate-900">
+              Only Learn
+            </h2>
             <p className="mt-4 max-w-md text-sm leading-6 text-slate-600">
-              로그인 후 퀴즈 풀이, 자료 관리, 학습 기록을 한 화면에서 이어서 진행할 수 있어요.
+              퀴즈 풀이, 자료 관리, 학습 기록을 한 화면에서 이어서 진행하세요.
             </p>
           </div>
 

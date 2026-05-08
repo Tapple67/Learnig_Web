@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+﻿import OpenAI from "openai";
 import { z } from "zod";
 import type { AIProvider, QuizResult, SummaryResult } from "./types";
 import { buildSummaryPrompt } from "./prompts/summary_v1";
@@ -8,22 +8,22 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-function mustEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
-// ---- Quiz JSON schema (엄격) ----
 const QuizItemSchema = z.object({
   type: z.enum(["mcq", "tf", "short"]),
   question: z.string().min(1),
-  // ✅ 선택지: 있어도 되고 없어도 됨(특히 short)
   choices: z.array(z.string()).optional().nullable(),
   answerKey: z.any(),
   explanation: z.string().min(1),
   topic: z.string().optional().nullable(),
   points: z.number().int().min(1).optional(),
+  evidence: z
+    .object({
+      source: z.enum(["note", "mixed", "pdf"]),
+      page: z.number().int().positive().optional(),
+      quote: z.string().optional(),
+    })
+    .optional(),
+  signalHits: z.array(z.string()).optional(),
 });
 
 const QuizSchema = z.object({
@@ -34,7 +34,6 @@ const QuizSchema = z.object({
 async function responseText(prompt: string) {
   const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
 
-  // Responses API
   const r = await client.responses.create({
     model,
     input: [
@@ -46,10 +45,26 @@ async function responseText(prompt: string) {
     ],
   });
 
-  // JS SDK convenience: output_text
-  // (문서에 output_text 언급) :contentReference[oaicite:3]{index=3}
   // @ts-ignore
   return (r as any).output_text?.trim?.() ?? "";
+}
+
+function normalizeJsonObject(raw: string) {
+  const firstBrace = raw.indexOf("{");
+  const lastBrace = raw.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    return raw.slice(firstBrace, lastBrace + 1);
+  }
+  return raw;
+}
+
+function noteCoverage(items: Array<{ evidence?: { source?: string } }>) {
+  if (items.length === 0) return 0;
+  const hits = items.filter((it) => {
+    const src = it.evidence?.source;
+    return src === "note" || src === "mixed";
+  }).length;
+  return hits / items.length;
 }
 
 export const OpenAIProvider: AIProvider = {
@@ -61,6 +76,7 @@ export const OpenAIProvider: AIProvider = {
         page: p.page,
         pdfText: p.pdfText,
         note: p.note,
+        noteSignals: p.noteSignals,
       })),
     });
 
@@ -69,80 +85,74 @@ export const OpenAIProvider: AIProvider = {
 
     return {
       content: text,
+      canonical: text,
+      adaptive: text,
       provider: "openai",
       model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
       promptVersion: packet.promptVersion,
     };
   },
 
-  async generateQuiz({ summary, spec }): Promise<QuizResult> {
-    const prompt = buildQuizPrompt(summary, spec);
+  async generateQuiz({ summary, notes, spec }): Promise<QuizResult> {
+    const prompt = buildQuizPrompt(summary, notes, spec);
 
-    // 1차 시도: 그대로 JSON 받기
     let raw = await responseText(prompt);
-
-    // JSON 이외 텍스트가 섞이는 경우 대비(가장 흔함)
-    // "{ ... }" 부분만 잘라내기
-    const firstBrace = raw.indexOf("{");
-    const lastBrace = raw.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      raw = raw.slice(firstBrace, lastBrace + 1);
-    }
+    raw = normalizeJsonObject(raw);
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      // 2차 복구 시도: "JSON만 다시 출력" 리프롬프트
-      const fixPrompt = `
-방금 너의 출력이 JSON 파싱에 실패했다.
-오직 JSON 하나만, 위 스키마에 맞춰 다시 출력해라. 다른 텍스트 금지.
-
-[원본 요약]
-${summary}
-`;
+      const fixPrompt = `${prompt}\n\n위 지시를 그대로 따르되, 유효한 JSON 객체 하나만 다시 출력해라. 다른 텍스트는 절대 출력하지 마라.`;
       let raw2 = await responseText(fixPrompt);
-      const b1 = raw2.indexOf("{");
-      const b2 = raw2.lastIndexOf("}");
-      if (b1 !== -1 && b2 !== -1) raw2 = raw2.slice(b1, b2 + 1);
+      raw2 = normalizeJsonObject(raw2);
       parsed = JSON.parse(raw2);
     }
 
-    const validated = QuizSchema.parse(parsed);
+    let validated = QuizSchema.parse(parsed);
 
-    // answerKey 형태는 타입별로 최소 보정(안전)
+    const hasAnyNote = notes.some((n) => n.note.trim().length > 0);
+    if (hasAnyNote && noteCoverage(validated.items) < 0.5) {
+      const retryPrompt = `${prompt}\n\n중요: note 또는 mixed evidence 비율을 최소 50% 이상으로 높여서 다시 생성해라.`;
+      let retryRaw = await responseText(retryPrompt);
+      retryRaw = normalizeJsonObject(retryRaw);
+      const retryParsed = JSON.parse(retryRaw);
+      validated = QuizSchema.parse(retryParsed);
+    }
+
     const items = validated.items.map((it) => {
-  const normalized = {
-    ...it,
-    choices: it.choices ?? null, // ✅ undefined -> null
-    topic: it.topic?.trim() || "기타 개념",
-    points: it.points ?? 1,
-  };
+      const normalized = {
+        ...it,
+        choices: it.choices ?? null,
+        topic: it.topic?.trim() || "기타 개념",
+        points: it.points ?? 1,
+        evidence: it.evidence ?? { source: "pdf" as const },
+        signalHits: it.signalHits ?? [],
+      };
 
-  if (normalized.type === "mcq") {
-    if (!Array.isArray(normalized.choices) || normalized.choices.length < 2) {
-      throw new Error("mcq choices must be a string[] with length >= 2");
-    }
-    if (typeof normalized.answerKey?.correctIndex !== "number") {
-      throw new Error("mcq answerKey.correctIndex missing");
-    }
-  }
+      if (normalized.type === "mcq") {
+        if (!Array.isArray(normalized.choices) || normalized.choices.length < 2) {
+          throw new Error("mcq choices must be a string[] with length >= 2");
+        }
+        if (typeof normalized.answerKey?.correctIndex !== "number") {
+          throw new Error("mcq answerKey.correctIndex missing");
+        }
+      }
 
-  if (normalized.type === "tf") {
-    // tf는 choices 없어도 되지만, 너 UI에서 O/X를 따로 그리고 있으니 OK
-    if (typeof normalized.answerKey?.correct !== "boolean") {
-      throw new Error("tf answerKey.correct missing");
-    }
-  }
+      if (normalized.type === "tf") {
+        if (typeof normalized.answerKey?.correct !== "boolean") {
+          throw new Error("tf answerKey.correct missing");
+        }
+      }
 
-  if (normalized.type === "short") {
-    if (!Array.isArray(normalized.answerKey?.accepted)) {
-      throw new Error("short answerKey.accepted missing");
-    }
-  }
+      if (normalized.type === "short") {
+        if (!Array.isArray(normalized.answerKey?.accepted)) {
+          throw new Error("short answerKey.accepted missing");
+        }
+      }
 
-  return normalized;
-});
+      return normalized;
+    });
 
     return {
       title: validated.title,

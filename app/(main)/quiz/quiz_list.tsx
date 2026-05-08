@@ -23,7 +23,7 @@ export default function QuizSetList(props: { quizSets: QuizSetCard[]; returnTo: 
   if (props.quizSets.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
-        퀴즈가 없습니다. <b>Create Quiz</b> 를 눌러 생성해보세요
+        퀴즈가 없습니다. <b>퀴즈 생성</b> 을 눌러 생성해보세요
       </div>
     );
   }

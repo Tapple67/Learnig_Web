@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 
-
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -26,11 +25,30 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="text-lg md:text-xl lg:text-5xl : p-3 : bg-gray-100">     { /*메인 내비게이션  tailwind 사용한 css*/ }
-          <Link href="/"> 홈 </Link>
-          <Link href="/subject"> 과목 </Link>
-          <Link href="/record"> 기록 </Link>
-          <Link href="/quiz"> 퀴즈 </Link>
+        <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/85 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+          <div className="mx-auto flex w-full max-w-7xl items-center gap-1 text-sm font-medium text-slate-600 sm:gap-2 sm:text-[15px]">
+            <Link href="/" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
+              홈
+            </Link>
+            <Link
+              href="/subject"
+              className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900"
+            >
+              과목
+            </Link>
+            <Link
+              href="/record"
+              className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900"
+            >
+              기록
+            </Link>
+            <Link
+              href="/quiz"
+              className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900"
+            >
+              퀴즈
+            </Link>
+          </div>
         </div>
         {children}
       </body>

@@ -52,19 +52,22 @@ export async function gradeAttempt(params: { attemptId: string; userId: string }
 
   const answerMap = new Map(attempt.answers.map((a) => [a.quizItemId, a.response]));
 
-  let score = 0;
-  let maxScore = 0;
+  let rawScore = 0;
+  let rawMaxScore = 0;
 
   const graded = attempt.quizSet.items.map((it) => {
     const resp = answerMap.get(it.id) ?? null;
     const pts = it.points ?? 1;
-    maxScore += pts;
+    rawMaxScore += pts;
 
     const r = gradeOne({ type: it.type, points: pts, answerKey: it.answerKey }, resp);
-    score += r.earned;
+    rawScore += r.earned;
 
     return { quizItemId: it.id, response: resp ?? {}, ...r };
   });
+
+  const maxScore = rawMaxScore > 0 ? 100 : 0;
+  const score = rawMaxScore > 0 ? Math.round((rawScore / rawMaxScore) * 100) : 0;
 
   await prisma.$transaction(async (tx) => {
     for (const g of graded) {

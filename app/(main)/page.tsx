@@ -14,7 +14,7 @@ export default async function MainPage() {
           <p className="text-sm text-slate-500">대시보드</p>
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">학습 홈</h1>
           <p className="mt-2 text-sm text-slate-600">
-            블록을 확장해 나가는 구조로 구성되어 있어요. 현재 학기를 중심으로 학습 흐름을 관리해 보세요.
+            현재 학기를 중심으로 학습 흐름을 관리해 보세요.
           </p>
         </header>
 

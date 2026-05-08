@@ -79,7 +79,7 @@ export default function QuizShell(props: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           materialId: selected.materialId,
-          spec: { mcqCount: 5, tfCount: 2, shortCount: 1 },
+          spec: { mcqCount: 6, tfCount: 3, shortCount: 1 },
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -115,21 +115,22 @@ export default function QuizShell(props: {
             <h1 className="text-base font-semibold tracking-tight text-slate-900">Quiz</h1>
           </div>
 
-          <button
-            onClick={() => setStatsOpen(true)}
-            disabled={!selected.materialId}
-            className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            통계
-          </button>
-
-          <button
-            onClick={() => setConfirmCreateOpen(true)}
-            disabled={!selected.materialId || creating}
-            className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {creating ? "생성중..." : "퀴즈 생성"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setConfirmCreateOpen(true)}
+              disabled={!selected.materialId || creating}
+              className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            >
+              {creating ? "생성중..." : "퀴즈 생성"}
+            </button>
+            <button
+              onClick={() => setStatsOpen(true)}
+              disabled={!selected.materialId}
+              className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+            >
+              통계
+            </button>
+          </div>
         </div>
 
         <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-12">

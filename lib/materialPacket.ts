@@ -1,10 +1,18 @@
-import { prisma } from "@/lib/db";
+﻿import { prisma } from "@/lib/db";
 import { sha256 } from "@/lib/hash";
+
+export type NoteSignals = {
+  difficulty?: "high";
+  easyExplain?: boolean;
+  quizPriority?: "high";
+  confuseWith?: string[];
+};
 
 export type MaterialPagePacket = {
   page: number;
   pdfText: string;
   note: string;
+  noteSignals: NoteSignals | null;
   noteUpdatedAt: string | null;
 };
 
@@ -17,7 +25,7 @@ export type MaterialPacket = {
   pages: MaterialPagePacket[];
 };
 
-export const SUMMARY_PROMPT_VERSION = "summary.v1";
+export const SUMMARY_PROMPT_VERSION = "summary.v2";
 
 export async function buildMaterialPacket(materialId: string): Promise<MaterialPacket> {
   const material = await prisma.material.findUnique({
@@ -28,7 +36,7 @@ export async function buildMaterialPacket(materialId: string): Promise<MaterialP
       week: true,
       title: true,
       pageTexts: { select: { page: true, text: true }, orderBy: { page: "asc" } },
-      notes: { select: { page: true, content: true, updatedAt: true }, orderBy: { page: "asc" } },
+      notes: { select: { page: true, content: true, signals: true, updatedAt: true }, orderBy: { page: "asc" } },
     },
   });
   if (!material) throw new Error("Material not found");
@@ -41,7 +49,14 @@ export async function buildMaterialPacket(materialId: string): Promise<MaterialP
 
   const textMap = new Map(material.pageTexts.map((x) => [x.page, x.text ?? ""]));
   const noteMap = new Map(
-    material.notes.map((x) => [x.page, { content: x.content ?? "", updatedAt: x.updatedAt }])
+    material.notes.map((x) => [
+      x.page,
+      {
+        content: x.content ?? "",
+        signals: (x.signals as NoteSignals | null) ?? null,
+        updatedAt: x.updatedAt,
+      },
+    ])
   );
 
   const packetPages: MaterialPagePacket[] = pages.map((p) => {
@@ -51,6 +66,7 @@ export async function buildMaterialPacket(materialId: string): Promise<MaterialP
       page: p,
       pdfText,
       note: (n?.content ?? "").trim(),
+      noteSignals: n?.signals ?? null,
       noteUpdatedAt: n?.updatedAt ? n.updatedAt.toISOString() : null,
     };
   });
@@ -73,6 +89,7 @@ export function computeMaterialSourceHash(packet: MaterialPacket) {
       page: p.page,
       pdfText: p.pdfText,
       note: p.note,
+      noteSignals: p.noteSignals,
       noteUpdatedAt: p.noteUpdatedAt,
     })),
   };
