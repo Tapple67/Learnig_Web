@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/auth";
 import { assertQuizSetOwnedByUser } from "@/lib/authz";
+import { logQuizActivity } from "@/lib/activity";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,7 @@ export async function POST(req: Request) {
       select: { quizItemId: true, response: true, updatedAt: true },
     });
 
+    await logQuizActivity({ userId, quizSetId });
     return NextResponse.json({ attemptId, quizSet, existingAnswers });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "시작 실패" }, { status: 403 });

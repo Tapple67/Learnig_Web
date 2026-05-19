@@ -1,6 +1,6 @@
 // lib/stats/utils.ts
 
-import type { QuizType, TopicStat, TypeStat, UnderstandingResult } from "./types";
+import type { QuizType, TopicStat, TypeStat, UnderstandingResult } from "../types";
 
 export function round1(n: number) {
   return Math.round(n * 10) / 10;

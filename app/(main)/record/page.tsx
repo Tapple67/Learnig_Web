@@ -1,14 +1,16 @@
-"use client";
+﻿"use client";
 
-import { useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import LeftPanel from "./components/LeftPanel";
 import RightPanel from "./components/RightPanel";
 import { useMaterials } from "./hooks/useMaterials";
 import { useNotes } from "./hooks/useNotes";
-import { useQuiz } from "./hooks/useQuiz";
 import { usePdf } from "./hooks/usePdf";
 
 export default function Page() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
   const [msg, setMsg] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -17,16 +19,20 @@ export default function Page() {
 
   const materialsHook = useMaterials();
   const notes = useNotes(materialsHook.activeMaterialId, page);
-  const quiz = useQuiz(materialsHook.activeMaterialId);
   const pdf = usePdf(materialsHook.activeMaterialId, setMsg);
+
+  useEffect(() => {
+    if (!materialsHook.activeMaterialId) return;
+    void fetch("/api/activity/record-visit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ materialId: materialsHook.activeMaterialId }),
+    }).catch(() => {});
+  }, [materialsHook.activeMaterialId]);
 
   async function requestPageChange(nextPage: number) {
     if (nextPage < 1) return;
-
-    if (notes.dirty) {
-      await notes.saveNote();
-    }
-
+    if (notes.dirty) await notes.saveNote();
     setPage(nextPage);
   }
 
@@ -49,8 +55,7 @@ export default function Page() {
     const title = window.prompt("자료 이름", `${nextWeek}주차 자료`) ?? "";
     const finalTitle = title.trim() || `${nextWeek}주차 자료`;
 
-    const weekInput =
-      window.prompt("몇 주차 자료인지 입력해줘", String(nextWeek)) ?? "";
+    const weekInput = window.prompt("몇 주차 자료인지 입력해줘", String(nextWeek)) ?? "";
     const finalWeek = Math.max(1, Number(weekInput) || nextWeek);
 
     const form = new FormData();
@@ -74,10 +79,7 @@ export default function Page() {
         return;
       }
 
-      await materialsHook.reloadMaterials(
-        materialsHook.selectedSubjectId,
-        data?.id
-      );
+      await materialsHook.reloadMaterials(materialsHook.selectedSubjectId, data?.id);
       setPage(1);
     } catch {
       setMsg("업로드 중 네트워크 오류");
@@ -89,46 +91,30 @@ export default function Page() {
     setPage(1);
   }
 
+  function handleGoBack() {
+    const returnTo = searchParams.get("returnTo");
+    if (returnTo) {
+      router.push(returnTo);
+      return;
+    }
+    router.push("/subject");
+  }
+
   return (
-    <div className="min-h-screen bg-[#f5f7fb] text-slate-900">
-      
-
-      <div className="flex gap-4 p-4">
-        <aside
-          className={`shrink-0 transition-all duration-300 ${
-            sidebarOpen ? "w-[290px]" : "w-[88px]"
-          }`}
-        >
-          <div className="h-[calc(100vh-108px)] rounded-[24px] border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-            <div className="h-full p-3">
-              <LeftPanel
-                sidebarOpen={sidebarOpen}
-                setSidebarOpen={setSidebarOpen}
-                grades={materialsHook.grades}
-                selectedGradeId={materialsHook.selectedGradeId}
-                setSelectedGradeId={materialsHook.setSelectedGradeId}
-                subjects={materialsHook.subjects}
-                selectedSubjectId={materialsHook.selectedSubjectId}
-                setSelectedSubjectId={materialsHook.setSelectedSubjectId}
-                materials={materialsHook.materials}
-                activeMaterialId={materialsHook.activeMaterialId}
-                onSelectMaterial={handleSelectMaterial}
-                fileInputRef={fileInputRef}
-                uploadPdf={uploadPdf}
-              />
-            </div>
+    <div className="h-[calc(100vh-52px)] bg-[#f5f7fb] text-slate-900">
+      <div className="h-full p-3">
+        {msg && (
+          <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 shadow-sm">
+            {msg}
           </div>
-        </aside>
+        )}
 
-        <main className="min-w-0 flex-1">
-          {msg && (
-            <div className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 shadow-sm">
-              {msg}
-            </div>
-          )}
-
-          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+        <div className="h-full min-w-0">
+          <main className="h-full min-w-0 rounded-lg border border-slate-200 bg-white p-3 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
             <RightPanel
+              sidebarOpen={sidebarOpen}
+              onToggleSidebar={() => setSidebarOpen((v) => !v)}
+              onGoSubject={handleGoBack}
               activeMaterialId={materialsHook.activeMaterialId}
               signedUrl={pdf.signedUrl}
               loadingFileUrl={pdf.loadingFileUrl}
@@ -138,11 +124,37 @@ export default function Page() {
               setContent={notes.setContent}
               setDirty={notes.setDirty}
               saveNote={notes.saveNote}
-              createQuiz={quiz.createQuiz}
-              quizLoading={quiz.quizLoading}
             />
-          </div>
-        </main>
+          </main>
+
+          {sidebarOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="사이드바 닫기 배경"
+                className="fixed inset-0 z-30 bg-transparent"
+                onClick={() => setSidebarOpen(false)}
+              />
+              <aside className="fixed left-3 top-[64px] z-40 h-[calc(100vh-76px)] w-[320px] rounded-lg border border-slate-200 bg-white p-3 shadow-2xl">
+                <LeftPanel
+                  sidebarOpen={sidebarOpen}
+                  setSidebarOpen={setSidebarOpen}
+                  grades={materialsHook.grades}
+                  selectedGradeId={materialsHook.selectedGradeId}
+                  setSelectedGradeId={materialsHook.setSelectedGradeId}
+                  subjects={materialsHook.subjects}
+                  selectedSubjectId={materialsHook.selectedSubjectId}
+                  setSelectedSubjectId={materialsHook.setSelectedSubjectId}
+                  materials={materialsHook.materials}
+                  activeMaterialId={materialsHook.activeMaterialId}
+                  onSelectMaterial={handleSelectMaterial}
+                  fileInputRef={fileInputRef}
+                  uploadPdf={uploadPdf}
+                />
+              </aside>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

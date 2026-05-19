@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/db";
 
 const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+const tokenize = (s: string) =>
+  norm(s)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(" ")
+    .map((x) => x.trim())
+    .filter((x) => x.length >= 2);
 
 function gradeOne(item: { type: string; points: number; answerKey: any }, response: any) {
   const pts = item.points ?? 1;
@@ -22,7 +28,27 @@ function gradeOne(item: { type: string; points: number; answerKey: any }, respon
   if (item.type === "short") {
     const accepted: string[] = Array.isArray(item.answerKey?.accepted) ? item.answerKey.accepted : [];
     const text = typeof response?.text === "string" ? response.text : "";
-    const ok = accepted.map(norm).some((a) => a === norm(text));
+    const textNorm = norm(text);
+    const exact = accepted.map(norm).some((a) => a === textNorm);
+
+    // 1차 규칙 채점: exact가 아니면 핵심 키워드 포함률로 보정
+    let keywordMatch = false;
+    if (!exact && textNorm) {
+      const answerKeywords = new Set(
+        accepted.flatMap((a) => tokenize(a)).filter((k) => k.length >= 2)
+      );
+      const responseKeywords = new Set(tokenize(textNorm));
+      if (answerKeywords.size > 0 && responseKeywords.size > 0) {
+        let hit = 0;
+        for (const k of answerKeywords) {
+          if (responseKeywords.has(k)) hit += 1;
+        }
+        const ratio = hit / answerKeywords.size;
+        keywordMatch = ratio >= 0.6 || hit >= 2;
+      }
+    }
+
+    const ok = exact || keywordMatch;
     return { isCorrect: ok, earned: ok ? pts : 0 };
   }
 

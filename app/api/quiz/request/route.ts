@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/auth";
 import { assertMaterialOwnedByUser } from "@/lib/authz";
-import { generateAndSaveQuiz } from "@/services/quizContentService";
+import { generateAndSaveQuiz } from "@/app/(main)/quiz/hooks/quizContentService";
 import { prisma } from "@/lib/db";
+import { logQuizActivity } from "@/lib/activity";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,7 @@ export async function POST(req: Request) {
 
     const spec = body?.spec ?? undefined; // {mcqCount, tfCount, shortCount}
     const result = await generateAndSaveQuiz({ materialId, spec });
+    await logQuizActivity({ userId, quizSetId: result.quizSetId });
 
     return NextResponse.json({ ok: true, ...result });
   } catch (e: any) {
@@ -76,6 +78,57 @@ export async function GET(req: Request) {
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "목록 조회 실패" }, { status: 403 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  const quizSetId = String(body?.quizSetId ?? "");
+  const title = String(body?.title ?? "").trim();
+  if (!quizSetId) return NextResponse.json({ error: "quizSetId 필요" }, { status: 400 });
+  if (!title) return NextResponse.json({ error: "제목을 입력해 주세요." }, { status: 400 });
+
+  try {
+    const owned = await prisma.quizSet.findFirst({
+      where: { id: quizSetId, material: { subject: { grade: { userId } } } },
+      select: { id: true },
+    });
+    if (!owned) return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+
+    const updated = await prisma.quizSet.update({
+      where: { id: quizSetId },
+      data: { title },
+      select: { id: true, title: true },
+    });
+
+    return NextResponse.json({ ok: true, quizSet: updated });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "퀴즈 수정 실패" }, { status: 400 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const userId = await getUserId();
+  if (!userId) return NextResponse.json({ error: "로그인 필요" }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  const quizSetId = String(body?.quizSetId ?? "");
+  if (!quizSetId) return NextResponse.json({ error: "quizSetId 필요" }, { status: 400 });
+
+  try {
+    const owned = await prisma.quizSet.findFirst({
+      where: { id: quizSetId, material: { subject: { grade: { userId } } } },
+      select: { id: true },
+    });
+    if (!owned) return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+
+    await prisma.quizSet.delete({ where: { id: quizSetId } });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "퀴즈 삭제 실패" }, { status: 400 });
   }
 }
 

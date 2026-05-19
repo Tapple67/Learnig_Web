@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import LogoutButton from "@/app/components/logout_button";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,24 +31,19 @@ export default function RootLayout({
             <Link href="/" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
               홈
             </Link>
-            <Link
-              href="/subject"
-              className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900"
-            >
+            <Link href="/subject" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
               과목
             </Link>
-            <Link
-              href="/record"
-              className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900"
-            >
+            <Link href="/record" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
               기록
             </Link>
-            <Link
-              href="/quiz"
-              className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900"
-            >
-              퀴즈
-            </Link>
+
+            <div className="ml-auto flex items-center gap-2">
+              <Link href="/mypage" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
+                마이페이지
+              </Link>
+              <LogoutButton />
+            </div>
           </div>
         </div>
         {children}

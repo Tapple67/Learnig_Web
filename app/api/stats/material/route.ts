@@ -1,7 +1,7 @@
 // app/api/stats/material/route.ts
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/auth";
-import { getMaterialStats } from "@/lib/stats/materialstats";
+import { getMaterialStats } from "@/app/(main)/stats/hooks/material_stats";
 
 export const runtime = "nodejs";
 

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import type { MaterialStatsResponse } from "@/lib/stats/types";
+import type { MaterialStatsResponse } from "@/app/(main)/stats/types";
 
 function pct(n: number) {
   return `${Math.max(0, Math.min(100, n))}%`;

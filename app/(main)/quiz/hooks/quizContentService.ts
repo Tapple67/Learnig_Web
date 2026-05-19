@@ -1,7 +1,7 @@
 ﻿import { prisma } from "@/lib/db";
 import { getAIProvider } from "@/ai";
-import { ensureMaterialSummary } from "@/services/summaryService";
-import { buildMaterialPacket } from "@/lib/materialPacket";
+import { ensureMaterialSummary } from "@/app/(main)/quiz/hooks/summaryService";
+import { buildMaterialPacket } from "@/app/(main)/quiz/utils/material_packet";
 import { Prisma } from "@prisma/client";
 
 function normalizePointsTo100(source: Array<{ points?: number }>): number[] {
@@ -70,7 +70,10 @@ export async function generateAndSaveQuiz(params: {
       explanation: it.explanation ?? "",
       topic: it.topic?.trim() || "기타 개념",
       points: normalizedPoints[idx],
-      evidence: (it.evidence ?? null) as Prisma.InputJsonValue | null,
+      evidence:
+        it.evidence == null
+          ? Prisma.JsonNull
+          : (it.evidence as Prisma.InputJsonValue),
       signalHits: (it.signalHits ?? []) as Prisma.InputJsonValue,
     };
 

@@ -1,7 +1,7 @@
 ﻿import { getUserId } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import Current_Grade from "./_blocks/current_grade";
-import Recent_Activity from "./_blocks/recent_activity";
+import Current_Grade from "./_home/current_grade";
+import Recent_Activity from "./_home/recent_activity";
 
 export default async function MainPage() {
   const userId = await getUserId();

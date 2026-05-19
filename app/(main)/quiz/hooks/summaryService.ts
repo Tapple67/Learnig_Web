@@ -1,5 +1,5 @@
 ﻿import { prisma } from "@/lib/db";
-import { buildMaterialPacket, computeMaterialSourceHash } from "@/lib/materialPacket";
+import { buildMaterialPacket, computeMaterialSourceHash } from "@/app/(main)/quiz/utils/material_packet";
 import { getAIProvider } from "@/ai";
 
 function computeSignalsDigest(packet: Awaited<ReturnType<typeof buildMaterialPacket>>) {

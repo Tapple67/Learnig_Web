@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "@/app/components/ui/modal";
-import { AddSubjectAction } from "@/app/(main)/subject/components/subject_action";
+import { AddSubjectAction } from "@/app/(main)/subject/hooks/subject_action";
 
 type ActionState = { ok: boolean; error?: string } | null;
 

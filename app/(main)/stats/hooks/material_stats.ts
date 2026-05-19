@@ -1,14 +1,14 @@
 // lib/stats/materialStats.ts
 
 import { prisma } from "@/lib/db";
-import type { MaterialStatsResponse, QuizType, TopicStat } from "./types";
+import type { MaterialStatsResponse, QuizType, TopicStat } from "../types";
 import {
   buildRecommendations,
   getEmptyTypeStats,
   getUnderstandingLevel,
   round1,
   toPercent,
-} from "./utils";
+} from "../utils/stats_utils";
 
 export async function getMaterialStats(params: {
   userId: string;

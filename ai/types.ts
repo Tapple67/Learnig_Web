@@ -1,4 +1,4 @@
-﻿import type { MaterialPacket, NoteSignals } from "@/lib/materialPacket";
+﻿import type { MaterialPacket, NoteSignals } from "@/app/(main)/quiz/utils/material_packet";
 
 export type SummaryResult = {
   content: string;

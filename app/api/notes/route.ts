@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/auth";
-import { logNoteEdit } from "@/lib/activity";
+import { logRecordActivity } from "@/lib/activity";
 
 export async function GET(req: Request) {
   const userId = await getUserId();
@@ -56,11 +56,7 @@ export async function POST(req: Request) {
     select: { id: true, page: true, content: true },
   });
 
-  await logNoteEdit({
-    userId,
-    materialId,
-    page,
-  });
+  await logRecordActivity({ userId, materialId });
 
   return NextResponse.json({ ok: true, note });
 }
