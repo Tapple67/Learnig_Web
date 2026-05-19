@@ -1,6 +1,6 @@
 ﻿import { prisma } from "@/lib/db";
 import { getAIProvider } from "@/ai";
-import { ensureMaterialSummary } from "@/app/(main)/quiz/hooks/summaryService";
+import { ensureMaterialSummary } from "@/app/(main)/quiz/hooks/use_summary";
 import { buildMaterialPacket } from "@/app/(main)/quiz/utils/material_packet";
 import { Prisma } from "@prisma/client";
 

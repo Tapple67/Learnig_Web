@@ -1,7 +1,7 @@
 ﻿import { redirect } from "next/navigation";
 import { getUserId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import Combi from "./components/combi";
+import Combi from "./components/Combi";
 
 type SearchParams = {
   gradeId?: string;

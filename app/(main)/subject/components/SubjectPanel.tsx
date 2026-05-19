@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import MoreActionsMenu from "./more-actions-menu";
+import MoreActionsMenu from "./MoreActionsMenu";
 import type { Grade, Subject } from "../types";
 
 type SubjectPanelProps = {

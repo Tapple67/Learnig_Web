@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
-import Modal from "@/app/components/ui/modal";
+import Modal from "@/app/components/ui/Modal";
 import { AddSubjectAction } from "@/app/(main)/subject/hooks/subject_action";
 
 type ActionState = { ok: boolean; error?: string } | null;

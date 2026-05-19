@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/auth";
 import { assertMaterialOwnedByUser } from "@/lib/authz";
-import { ensureMaterialSummary } from "@/app/(main)/quiz/hooks/summaryService";
+import { ensureMaterialSummary } from "@/app/(main)/quiz/hooks/use_summary";
 
 export const runtime = "nodejs";
 

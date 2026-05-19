@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Modal from "@/app/components/ui/modal";
+import Modal from "@/app/components/ui/Modal";
 
 type GradeOption = {
   id: string;

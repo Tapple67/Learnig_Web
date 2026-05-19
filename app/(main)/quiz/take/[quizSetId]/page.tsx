@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Modal from "@/app/components/ui/modal";
+import Modal from "@/app/components/ui/Modal";
 
 type QuizItemClient = {
   id: string;

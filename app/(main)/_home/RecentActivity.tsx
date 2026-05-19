@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getUserId } from "@/lib/auth";
-import BlockShell from "./block_shell";
+import BlockShell from "./BlockShell";
 
 type Row = {
   id: string;

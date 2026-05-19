@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Modal from "@/app/components/ui/modal";
+import Modal from "@/app/components/ui/Modal";
 import MaterialStatsModal from "@/app/(main)/stats/components/material_stats_modal";
-import SubjectPanel from "./subject-panel";
-import MoreActionsMenu from "./more-actions-menu";
+import SubjectPanel from "./SubjectPanel";
+import MoreActionsMenu from "./MoreActionsMenu";
 import { useSubjectPanelState } from "../hooks/use-subject-panel-state";
 import { formatDaysAgo } from "../utils/date";
 import type {
