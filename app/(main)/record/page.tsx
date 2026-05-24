@@ -4,9 +4,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import LeftPanel from "./components/LeftPanel";
 import RightPanel from "./components/RightPanel";
-import { useMaterials } from "./hooks/useMaterials";
-import { useNotes } from "./hooks/useNotes";
-import { usePdf } from "./hooks/usePdf";
+import { useMaterials } from "./hooks/use_materials";
+import { useNotes } from "./hooks/use_notes";
+import { usePdf } from "./hooks/use_pdf";
 
 export default function Page() {
   const router = useRouter();

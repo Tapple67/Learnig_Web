@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "@/app/components/ui/Modal";
-import MaterialStatsModal from "@/app/(main)/stats/components/material_stats_modal";
+import MaterialStatsModal from "@/app/(main)/stats/components/MaterialStatsModal";
 import SubjectPanel from "./SubjectPanel";
 import MoreActionsMenu from "./MoreActionsMenu";
-import { useSubjectPanelState } from "../hooks/use-subject-panel-state";
+import { useSubjectPanelState } from "../hooks/use_subject_panel_state";
 import { formatDaysAgo } from "../utils/date";
 import type {
   ContentFilter,
@@ -303,7 +303,7 @@ export default function Combi({
     setBusy(true);
     setMsg("");
     try {
-      const res = await fetch("/api/summary/request", {
+      const res = await fetch("/api/summary/summaries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ materialId: selectedMaterialId }),
@@ -323,7 +323,7 @@ export default function Combi({
     setBusy(true);
     setMsg("");
     try {
-      const res = await fetch("/api/quiz/request", {
+      const res = await fetch("/api/quiz/quiz-sets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -357,7 +357,7 @@ export default function Combi({
     setBusy(true);
     setMsg("");
     try {
-      const res = await fetch("/api/quiz/request", {
+      const res = await fetch("/api/quiz/quiz-sets", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quizSetId: editingQuizSetId, title: editQuizTitle.trim() }),
@@ -378,7 +378,7 @@ export default function Combi({
     setBusy(true);
     setMsg("");
     try {
-      const res = await fetch("/api/quiz/request", {
+      const res = await fetch("/api/quiz/quiz-sets", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ quizSetId: editingQuizSetId }),

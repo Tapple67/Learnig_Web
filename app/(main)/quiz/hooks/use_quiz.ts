@@ -4,6 +4,40 @@ import { ensureMaterialSummary } from "@/app/(main)/quiz/hooks/use_summary";
 import { buildMaterialPacket } from "@/app/(main)/quiz/utils/material_packet";
 import { Prisma } from "@prisma/client";
 
+const QUIZ_SOURCE_TEXT_LIMIT = 5000;
+const FALLBACK_SOURCE_PAGE_LIMIT = 8;
+
+function truncateForQuizContext(text: string, limit = QUIZ_SOURCE_TEXT_LIMIT) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit)}...`;
+}
+
+function buildQuizSourcePages(packet: Awaited<ReturnType<typeof buildMaterialPacket>>) {
+  const notePages = packet.pages.filter((p) => p.note.trim().length > 0);
+  const wantedPages = new Set<number>();
+
+  for (const p of notePages) {
+    wantedPages.add(p.page);
+    wantedPages.add(p.page - 1);
+    wantedPages.add(p.page + 1);
+  }
+
+  const selected =
+    wantedPages.size > 0
+      ? packet.pages.filter((p) => wantedPages.has(p.page))
+      : packet.pages.filter((p) => p.pdfText.trim().length > 0).slice(0, FALLBACK_SOURCE_PAGE_LIMIT);
+
+  return selected
+    .filter((p) => p.page > 0 && (p.pdfText.trim().length > 0 || p.note.trim().length > 0))
+    .map((p) => ({
+      page: p.page,
+      pdfText: truncateForQuizContext(p.pdfText),
+      note: p.note,
+      signals: p.noteSignals,
+    }));
+}
+
 function normalizePointsTo100(source: Array<{ points?: number }>): number[] {
   const count = source.length;
   if (count === 0) return [];
@@ -53,9 +87,10 @@ export async function generateAndSaveQuiz(params: {
   const notes = packet.pages
     .filter((p) => p.note.length > 0)
     .map((p) => ({ page: p.page, note: p.note, signals: p.noteSignals }));
+  const sourcePages = buildQuizSourcePages(packet);
 
   const ai = getAIProvider();
-  const quiz = await ai.generateQuiz({ summary: content, notes, spec });
+  const quiz = await ai.generateQuiz({ summary: content, notes, sourcePages, spec });
 
   if (!quiz?.items?.length) throw new Error("Quiz items empty");
 

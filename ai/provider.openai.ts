@@ -1,12 +1,41 @@
 ﻿import OpenAI from "openai";
+import type {
+  ResponseCreateParamsNonStreaming,
+  ResponseFormatTextJSONSchemaConfig,
+} from "openai/resources/responses/responses";
+import type { ReasoningEffort } from "openai/resources/shared";
 import { z } from "zod";
 import type { AIProvider, QuizResult, SummaryResult } from "./types";
 import { buildSummaryPrompt } from "./prompts/summary_v1";
-import { buildQuizPrompt, QUIZ_PROMPT_VERSION } from "./prompts/quiz_v1";
+import {
+  buildQuizCritiquePrompt,
+  buildQuizPrompt,
+  buildQuizRepairPrompt,
+  QUIZ_PROMPT_VERSION,
+} from "./prompts/quiz_v1";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+const QUIZ_GENERATOR_MODEL = process.env.OPENAI_QUIZ_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5.2";
+const QUIZ_CRITIC_MODEL = process.env.OPENAI_QUIZ_CRITIC_MODEL ?? "gpt-5-mini";
+const SUMMARY_MODEL = process.env.OPENAI_SUMMARY_MODEL ?? process.env.OPENAI_MODEL ?? "gpt-5-mini";
+
+function reasoningEffortFromEnv(value: string | undefined, fallback: Exclude<ReasoningEffort, null>) {
+  const allowed = new Set(["none", "minimal", "low", "medium", "high", "xhigh"]);
+  return allowed.has(value ?? "") ? (value as Exclude<ReasoningEffort, null>) : fallback;
+}
+
+const QUIZ_GENERATOR_REASONING = reasoningEffortFromEnv(
+  process.env.OPENAI_QUIZ_REASONING_EFFORT,
+  "medium"
+);
+const QUIZ_CRITIC_REASONING = reasoningEffortFromEnv(
+  process.env.OPENAI_QUIZ_CRITIC_REASONING_EFFORT,
+  "low"
+);
+const SUMMARY_REASONING = reasoningEffortFromEnv(process.env.OPENAI_SUMMARY_REASONING_EFFORT, "low");
 
 const QuizItemSchema = z.object({
   type: z.enum(["mcq", "tf", "short"]),
@@ -31,11 +60,137 @@ const QuizSchema = z.object({
   items: z.array(QuizItemSchema).min(1),
 });
 
-async function responseText(prompt: string) {
-  const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
+const QuizCritiqueSchema = z.object({
+  items: z.array(
+    z.object({
+      index: z.number().int().min(0),
+      score: z.number().int().min(1).max(5),
+      problems: z.array(z.string()).optional(),
+      regenerate: z.boolean().optional(),
+    })
+  ),
+  regenerateIndexes: z.array(z.number().int().min(0)).optional(),
+});
 
-  const r = await client.responses.create({
-    model,
+const QuizResponseFormat: ResponseFormatTextJSONSchemaConfig = {
+  type: "json_schema",
+  name: "quiz_result",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      title: { type: "string" },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            type: { type: "string", enum: ["mcq", "tf", "short"] },
+            question: { type: "string" },
+            choices: {
+              anyOf: [
+                { type: "array", items: { type: "string" } },
+                { type: "null" },
+              ],
+            },
+            answerKey: {
+              anyOf: [
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: { correctIndex: { type: "integer" } },
+                  required: ["correctIndex"],
+                },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: { correct: { type: "boolean" } },
+                  required: ["correct"],
+                },
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    accepted: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["accepted"],
+                },
+              ],
+            },
+            explanation: { type: "string" },
+            topic: { type: "string" },
+            points: { type: "integer", minimum: 1 },
+            evidence: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                source: { type: "string", enum: ["note", "mixed", "pdf"] },
+                page: { type: "integer", minimum: 1 },
+                quote: { type: "string" },
+              },
+              required: ["source", "page", "quote"],
+            },
+            signalHits: { type: "array", items: { type: "string" } },
+          },
+          required: [
+            "type",
+            "question",
+            "choices",
+            "answerKey",
+            "explanation",
+            "topic",
+            "points",
+            "evidence",
+            "signalHits",
+          ],
+        },
+      },
+    },
+    required: ["title", "items"],
+  },
+};
+
+const QuizCritiqueResponseFormat: ResponseFormatTextJSONSchemaConfig = {
+  type: "json_schema",
+  name: "quiz_critique",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            index: { type: "integer", minimum: 0 },
+            score: { type: "integer", minimum: 1, maximum: 5 },
+            problems: { type: "array", items: { type: "string" } },
+            regenerate: { type: "boolean" },
+          },
+          required: ["index", "score", "problems", "regenerate"],
+        },
+      },
+      regenerateIndexes: { type: "array", items: { type: "integer", minimum: 0 } },
+    },
+    required: ["items", "regenerateIndexes"],
+  },
+};
+
+async function responseText(
+  prompt: string,
+  options?: {
+    model?: string;
+    reasoningEffort?: ReasoningEffort;
+    responseFormat?: ResponseFormatTextJSONSchemaConfig;
+  }
+) {
+  const requestBase: Omit<ResponseCreateParamsNonStreaming, "reasoning"> = {
+    model: options?.model ?? SUMMARY_MODEL,
+    text: options?.responseFormat ? { format: options.responseFormat } : undefined,
     input: [
       {
         role: "developer",
@@ -43,10 +198,24 @@ async function responseText(prompt: string) {
       },
       { role: "user", content: prompt },
     ],
-  });
+  };
 
-  // @ts-ignore
-  return (r as any).output_text?.trim?.() ?? "";
+  const request: ResponseCreateParamsNonStreaming = {
+    ...requestBase,
+    reasoning: options?.reasoningEffort ? { effort: options.reasoningEffort } : undefined,
+  };
+
+  let r: Awaited<ReturnType<typeof client.responses.create>>;
+  try {
+    r = await client.responses.create(request);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (!message.includes("reasoning.effort")) throw error;
+    r = await client.responses.create(requestBase);
+  }
+
+  const outputText = (r as { output_text?: unknown }).output_text;
+  return typeof outputText === "string" ? outputText.trim() : "";
 }
 
 function normalizeJsonObject(raw: string) {
@@ -58,6 +227,28 @@ function normalizeJsonObject(raw: string) {
   return raw;
 }
 
+async function parseJsonWithRepair<T>(
+  prompt: string,
+  schema: z.ZodSchema<T>,
+  options: {
+    model: string;
+    reasoningEffort: ReasoningEffort;
+    responseFormat: ResponseFormatTextJSONSchemaConfig;
+  }
+): Promise<T> {
+  let raw = await responseText(prompt, options);
+  raw = normalizeJsonObject(raw);
+
+  try {
+    return schema.parse(JSON.parse(raw));
+  } catch {
+    const fixPrompt = `${prompt}\n\n위 지시를 그대로 따르되, 유효한 JSON 객체 하나만 다시 출력해라. 다른 텍스트는 절대 출력하지 마라.`;
+    let raw2 = await responseText(fixPrompt, options);
+    raw2 = normalizeJsonObject(raw2);
+    return schema.parse(JSON.parse(raw2));
+  }
+}
+
 function noteCoverage(items: Array<{ evidence?: { source?: string } }>) {
   if (items.length === 0) return 0;
   const hits = items.filter((it) => {
@@ -65,6 +256,14 @@ function noteCoverage(items: Array<{ evidence?: { source?: string } }>) {
     return src === "note" || src === "mixed";
   }).length;
   return hits / items.length;
+}
+
+function expectedItemCount(spec: { mcqCount: number; tfCount: number; shortCount: number }) {
+  return spec.mcqCount + spec.tfCount + spec.shortCount;
+}
+
+function hasLowQualityItems(critique: z.infer<typeof QuizCritiqueSchema>) {
+  return critique.items.some((item) => item.score <= 3 || item.regenerate);
 }
 
 export const OpenAIProvider: AIProvider = {
@@ -80,7 +279,10 @@ export const OpenAIProvider: AIProvider = {
       })),
     });
 
-    const text = await responseText(prompt);
+    const text = await responseText(prompt, {
+      model: SUMMARY_MODEL,
+      reasoningEffort: SUMMARY_REASONING,
+    });
     if (!text) throw new Error("Empty summary from model");
 
     return {
@@ -88,36 +290,52 @@ export const OpenAIProvider: AIProvider = {
       canonical: text,
       adaptive: text,
       provider: "openai",
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+      model: SUMMARY_MODEL,
       promptVersion: packet.promptVersion,
     };
   },
 
-  async generateQuiz({ summary, notes, spec }): Promise<QuizResult> {
-    const prompt = buildQuizPrompt(summary, notes, spec);
+  async generateQuiz({ summary, notes, sourcePages, spec }): Promise<QuizResult> {
+    const prompt = buildQuizPrompt(summary, notes, sourcePages, spec);
+    const generatorOptions = {
+      model: QUIZ_GENERATOR_MODEL,
+      reasoningEffort: QUIZ_GENERATOR_REASONING,
+      responseFormat: QuizResponseFormat,
+    };
 
-    let raw = await responseText(prompt);
-    raw = normalizeJsonObject(raw);
+    let validated = await parseJsonWithRepair(prompt, QuizSchema, generatorOptions);
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      const fixPrompt = `${prompt}\n\n위 지시를 그대로 따르되, 유효한 JSON 객체 하나만 다시 출력해라. 다른 텍스트는 절대 출력하지 마라.`;
-      let raw2 = await responseText(fixPrompt);
-      raw2 = normalizeJsonObject(raw2);
-      parsed = JSON.parse(raw2);
+    if (validated.items.length !== expectedItemCount(spec)) {
+      const countFixPrompt = `${prompt}\n\n중요: 문항 수를 정확히 맞춰라. mcq ${spec.mcqCount}개, tf ${spec.tfCount}개, short ${spec.shortCount}개를 포함한 전체 JSON 객체 하나만 출력해라.`;
+      validated = await parseJsonWithRepair(countFixPrompt, QuizSchema, generatorOptions);
     }
-
-    let validated = QuizSchema.parse(parsed);
 
     const hasAnyNote = notes.some((n) => n.note.trim().length > 0);
     if (hasAnyNote && noteCoverage(validated.items) < 0.5) {
       const retryPrompt = `${prompt}\n\n중요: note 또는 mixed evidence 비율을 최소 50% 이상으로 높여서 다시 생성해라.`;
-      let retryRaw = await responseText(retryPrompt);
-      retryRaw = normalizeJsonObject(retryRaw);
-      const retryParsed = JSON.parse(retryRaw);
-      validated = QuizSchema.parse(retryParsed);
+      validated = await parseJsonWithRepair(retryPrompt, QuizSchema, generatorOptions);
+    }
+
+    try {
+      const critique = await parseJsonWithRepair(
+        buildQuizCritiquePrompt(validated, notes, sourcePages),
+        QuizCritiqueSchema,
+        {
+          model: QUIZ_CRITIC_MODEL,
+          reasoningEffort: QUIZ_CRITIC_REASONING,
+          responseFormat: QuizCritiqueResponseFormat,
+        }
+      );
+
+      if (hasLowQualityItems(critique)) {
+        validated = await parseJsonWithRepair(
+          buildQuizRepairPrompt(prompt, validated, critique),
+          QuizSchema,
+          generatorOptions
+        );
+      }
+    } catch {
+      // Critique improves quality, but quiz generation should not fail only because review failed.
     }
 
     const items = validated.items.map((it) => {
@@ -158,7 +376,7 @@ export const OpenAIProvider: AIProvider = {
       title: validated.title,
       items,
       provider: "openai",
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
+      model: `${QUIZ_GENERATOR_MODEL} (critic: ${QUIZ_CRITIC_MODEL})`,
       promptVersion: QUIZ_PROMPT_VERSION,
     };
   },

@@ -15,7 +15,7 @@ export type QuizResult = {
     type: "mcq" | "tf" | "short";
     question: string;
     choices: string[] | null;
-    answerKey: any;
+    answerKey: Record<string, unknown>;
     explanation: string;
     topic?: string | null;
     points?: number;
@@ -31,11 +31,19 @@ export type QuizResult = {
   promptVersion: string;
 };
 
+export type QuizSourcePage = {
+  page: number;
+  pdfText: string;
+  note: string;
+  signals: NoteSignals | null;
+};
+
 export interface AIProvider {
   buildSummary(input: { packet: MaterialPacket }): Promise<SummaryResult>;
   generateQuiz(input: {
     summary: string;
     notes: Array<{ page: number; note: string; signals: NoteSignals | null }>;
+    sourcePages: QuizSourcePage[];
     spec: { mcqCount: number; tfCount: number; shortCount: number };
   }): Promise<QuizResult>;
 }

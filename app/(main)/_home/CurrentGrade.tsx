@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import BlockShell from "./BlockShell";
-import CurrentGradeModal from "./current_grade_modal";
+import CurrentGradeModal from "./CurrentGradeModal";
 import { getUserId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 

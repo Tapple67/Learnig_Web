@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUserId } from "@/lib/auth";
-import { gradeAttempt } from "@/app/(main)/quiz/hooks/grading";
+import { gradeAttempt } from "@/app/(main)/quiz/hooks/use_grading";
 
 export const runtime = "nodejs";
 

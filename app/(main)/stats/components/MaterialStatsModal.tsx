@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import Modal from "@/app/components/ui/Modal";
-import MaterialStatsView from "./material_stats_view";
+import MaterialStatsView from "./MaterialStatsView";
 import type { MaterialStatsResponse } from "@/app/(main)/stats/types";
 
 export default function MaterialStatsModal(props: {
