@@ -7,11 +7,11 @@ const WORKER_ID = `${os.hostname()}-${process.pid}`;
 const POLL_MS = 1500;
 
 async function getPdfjs() {
-  // top-level await 피하려고 함수로 감싼 건 좋아
+  
   return await import("pdfjs-dist/legacy/build/pdf");
 }
 
-// ====== Job 락 잡고 1개 가져오기 (Postgres 기준: SKIP LOCKED) ======
+// ====== Job 락 잡고 1개 가져오기 ======
 async function claimNextJob() {
   const rows = await prisma.$queryRaw<any[]>`
     UPDATE "Job"
@@ -44,7 +44,7 @@ async function downloadPdfFromSupabase(bucket: string, path: string): Promise<Ui
 
   const ab = await data.arrayBuffer();
   return new Uint8Array(ab);
-} // ✅ 여기 닫는 중괄호가 핵심!
+} 
 
 // ====== PDF 페이지별 텍스트 추출 (pdfjs) ======
 async function extractPagesText(pdfBytes: Uint8Array) {
