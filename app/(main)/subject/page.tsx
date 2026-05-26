@@ -9,6 +9,26 @@ type SearchParams = {
   materialId?: string;
 };
 
+type AttemptCard = {
+  id: string;
+  status: string;
+  score: number | null;
+  maxScore: number | null;
+  startedAt: Date;
+};
+
+function pickLatestAttempt(attempts: AttemptCard[]) {
+  const submitted = attempts.find((a) => a.status === "GRADED" || a.status === "SUBMITTED");
+  const picked = submitted ?? attempts[0] ?? null;
+  if (!picked) return null;
+  return {
+    id: picked.id,
+    status: picked.status,
+    score: picked.score,
+    maxScore: picked.maxScore,
+  };
+}
+
 export default async function SubjectPage({
   searchParams,
 }: {
@@ -53,25 +73,6 @@ export default async function SubjectPage({
 
   const selectedMaterialId = params.materialId ?? materials[0]?.id;
 
-  const selectedMaterial = selectedMaterialId
-    ? await prisma.material.findFirst({
-        where: { id: selectedMaterialId, subject: { grade: { userId } } },
-        select: {
-          id: true,
-          title: true,
-          week: true,
-          summary: {
-            select: {
-              id: true,
-              updatedAt: true,
-              provider: true,
-              model: true,
-            },
-          },
-        },
-      })
-    : null;
-
   const quizSets = selectedMaterialId
     ? await prisma.quizSet.findMany({
         where: { materialId: selectedMaterialId },
@@ -84,8 +85,7 @@ export default async function SubjectPage({
           attempts: {
             where: { userId },
             orderBy: [{ startedAt: "desc" }],
-            take: 1,
-            select: { id: true, status: true, score: true, maxScore: true },
+            select: { id: true, status: true, score: true, maxScore: true, startedAt: true },
           },
         },
       })
@@ -99,29 +99,12 @@ export default async function SubjectPage({
       selectedGradeId={selectedGradeId}
       selectedSubjectId={selectedSubjectId}
       selectedMaterialId={selectedMaterialId}
-      selectedMaterial={
-        selectedMaterial
-          ? {
-              id: selectedMaterial.id,
-              title: selectedMaterial.title,
-              week: selectedMaterial.week,
-              summary: selectedMaterial.summary
-                ? {
-                    id: selectedMaterial.summary.id,
-                    updatedAt: selectedMaterial.summary.updatedAt.toISOString(),
-                    provider: selectedMaterial.summary.provider,
-                    model: selectedMaterial.summary.model,
-                  }
-                : null,
-            }
-          : null
-      }
       quizSets={quizSets.map((q) => ({
         id: q.id,
         title: q.title,
         createdAt: q.createdAt.toISOString(),
         itemCount: q.items.length,
-        latestAttempt: q.attempts[0] ?? null,
+        latestAttempt: pickLatestAttempt(q.attempts),
       }))}
     />
   );

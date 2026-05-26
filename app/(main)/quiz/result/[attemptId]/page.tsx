@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 
 type QuizItem = {
   id: string;
@@ -22,8 +22,9 @@ type AnswerRow = {
   feedback?: string | null;
 };
 
-export default function QuizResultPage({ params }: { params: { attemptId: string } }) {
+export default function QuizResultPage() {
   const router = useRouter();
+  const params = useParams<{ attemptId: string }>();
   const attemptId = params.attemptId;
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -77,6 +78,14 @@ export default function QuizResultPage({ params }: { params: { attemptId: string
     setIdx((p) => Math.min(items.length - 1, p + 1));
   }
 
+  function goBackToList() {
+    const [path, query = ""] = returnTo.split("?");
+    const params = new URLSearchParams(query);
+    params.set("_r", String(Date.now()));
+    const qs = params.toString();
+    router.replace(qs ? `${path}?${qs}` : path);
+  }
+
   function formatShortMyAnswer(a: AnswerRow | null) {
     const t = typeof a?.response?.text === "string" ? a.response.text.trim() : "";
     return t || "미응답";
@@ -111,7 +120,7 @@ export default function QuizResultPage({ params }: { params: { attemptId: string
             <div className="text-lg font-semibold text-white">{attempt.quizSet?.title ?? "퀴즈 결과"}</div>
             <div className="text-sm text-slate-300">점수 {score} / {maxScore} | {idx + 1}/{items.length}</div>
           </div>
-          <button className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700" onClick={() => router.replace(returnTo)}>돌아가기</button>
+          <button className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700" onClick={goBackToList}>돌아가기</button>
         </div>
 
         <div className="mt-6 flex-1 overflow-auto rounded-xl bg-emerald-950/60 p-6 text-emerald-50">

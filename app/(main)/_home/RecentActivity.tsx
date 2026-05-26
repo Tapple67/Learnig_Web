@@ -17,11 +17,17 @@ type Row = {
 };
 
 function hrefRecord(r: { gradeId: string; subjectId: string; materialId: string; page: number }) {
+  const returnTo = `/subject?${new URLSearchParams({
+    gradeId: r.gradeId,
+    subjectId: r.subjectId,
+    materialId: r.materialId,
+  }).toString()}`;
   const sp = new URLSearchParams({
     gradeId: r.gradeId,
     subjectId: r.subjectId,
     materialId: r.materialId,
     page: String(r.page),
+    returnTo,
   });
   return `/record?${sp.toString()}`;
 }
@@ -87,7 +93,7 @@ export default async function RecentActivity() {
     >
       {finalRows.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          ㅁㅁ
+          활동이 없습니다.
         </p>
       ) : (
         <ul className="space-y-2">

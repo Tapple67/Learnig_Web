@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Modal from "@/app/components/ui/Modal";
 
 type QuizItemClient = {
@@ -28,10 +28,13 @@ type StartAttemptResponse = {
   attemptId: string;
   quizSet: { id: string; title: string | null; items: QuizItemClient[] };
   existingAnswers?: ExistingAnswerRow[];
+  code?: string;
+  error?: string;
 };
 
-export default function TakeQuizPage({ params }: { params: { quizSetId: string } }) {
+export default function TakeQuizPage() {
   const router = useRouter();
+  const params = useParams<{ quizSetId: string }>();
   const sp = useSearchParams();
   const quizSetId = params.quizSetId;
 
@@ -70,14 +73,18 @@ export default function TakeQuizPage({ params }: { params: { quizSetId: string }
             return;
           }
           if (res.status === 409) {
-            setMsg((data as any)?.error ?? "진행 중인 퀴즈가 없습니다.");
+            if (data.code === "ALREADY_SUBMITTED" && data.attemptId) {
+              router.replace(`/quiz/result/${data.attemptId}?returnTo=${encodeURIComponent(returnTo)}`);
+              return;
+            }
+            setMsg(data.error ?? "진행 중인 퀴즈가 없습니다.");
             setAttemptId("");
             setTitle(null);
             setItems([]);
             setAnswers({});
             return;
           }
-          throw new Error((data as any)?.error ?? "퀴즈 시작 실패");
+          throw new Error(data.error ?? "퀴즈 시작 실패");
         }
 
         setAttemptId(data.attemptId);
@@ -106,7 +113,7 @@ export default function TakeQuizPage({ params }: { params: { quizSetId: string }
         setLoading(false);
       }
     })();
-  }, [quizSetId, mode, router]);
+  }, [quizSetId, mode, returnTo, router]);
 
   const maxScore = useMemo(() => items.reduce((a, it) => a + (it.points ?? 1), 0), [items]);
 

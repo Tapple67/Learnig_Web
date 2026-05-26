@@ -4,8 +4,8 @@ import { ensureMaterialSummary } from "@/app/(main)/quiz/hooks/use_summary";
 import { buildMaterialPacket } from "@/app/(main)/quiz/utils/material_packet";
 import { Prisma } from "@prisma/client";
 
-const QUIZ_SOURCE_TEXT_LIMIT = 5000;
-const FALLBACK_SOURCE_PAGE_LIMIT = 8;
+const QUIZ_SOURCE_TEXT_LIMIT = 2000;
+const FALLBACK_SOURCE_PAGE_LIMIT = 3;
 
 function truncateForQuizContext(text: string, limit = QUIZ_SOURCE_TEXT_LIMIT) {
   const normalized = text.replace(/\s+/g, " ").trim();
@@ -82,8 +82,7 @@ export async function generateAndSaveQuiz(params: {
 }) {
   const spec = params.spec ?? { mcqCount: 5, tfCount: 3, shortCount: 2 };
 
-  const { summaryId, sourceHash, content } = await ensureMaterialSummary(params.materialId);
-  const packet = await buildMaterialPacket(params.materialId);
+  const { summaryId, sourceHash, content, packet } = await ensureMaterialSummary(params.materialId);
   const notes = packet.pages
     .filter((p) => p.note.length > 0)
     .map((p) => ({ page: p.page, note: p.note, signals: p.noteSignals }));

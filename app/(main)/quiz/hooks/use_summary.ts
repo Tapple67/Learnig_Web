@@ -23,6 +23,7 @@ export async function ensureMaterialSummary(materialId: string) {
       summaryId: existing.id,
       sourceHash,
       content: existing.canonical ?? existing.content,
+      packet,
       reused: true,
     };
   }
@@ -64,6 +65,7 @@ export async function ensureMaterialSummary(materialId: string) {
     summaryId: saved.id,
     sourceHash: saved.sourceHash,
     content: saved.canonical ?? saved.content,
+    packet,
     reused: false,
   };
 }

@@ -1,17 +1,6 @@
-﻿import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata } from "next";
 import Link from "next/link";
 import LogoutButton from "@/app/components/LogoutButton";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -24,30 +13,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/85 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-white/70">
-          <div className="mx-auto flex w-full max-w-7xl items-center gap-1 text-sm font-medium text-slate-600 sm:gap-2 sm:text-[15px]">
-            <Link href="/" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
-              홈
-            </Link>
-            <Link href="/subject" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
-              과목
-            </Link>
-            <Link href="/record" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
-              기록
-            </Link>
+    <>
+      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/85 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+        <div className="mx-auto flex w-full max-w-7xl items-center gap-1 text-sm font-medium text-slate-600 sm:gap-2 sm:text-[15px]">
+          <Link href="/" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
+            홈
+          </Link>
+          <Link href="/subject" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
+            과목
+          </Link>
+          <Link href="/record" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
+            기록
+          </Link>
 
-            <div className="ml-auto flex items-center gap-2">
-              <Link href="/mypage" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
-                마이페이지
-              </Link>
-              <LogoutButton />
-            </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Link href="/mypage" className="rounded-lg px-3 py-1.5 transition hover:bg-slate-100 hover:text-slate-900">
+              마이페이지
+            </Link>
+            <LogoutButton />
           </div>
         </div>
-        {children}
-      </body>
-    </html>
+      </div>
+      {children}
+    </>
   );
 }

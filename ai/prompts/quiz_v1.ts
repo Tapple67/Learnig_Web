@@ -1,6 +1,6 @@
 ﻿import type { QuizSourcePage } from "@/ai/types";
 
-export const QUIZ_PROMPT_VERSION = "quiz_v4_deep_understanding";
+export const QUIZ_PROMPT_VERSION = "quiz_v5_deep_understanding_no_page_refs";
 
 export type QuizGenSpec = {
   mcqCount: number;
@@ -34,6 +34,8 @@ JSON만 출력해서 퀴즈를 생성해라.
   { "source": "note"|"mixed"|"pdf", "page": number, "quote": string }
 - 모든 문항은 signalHits: string[]를 포함해야 한다.
 - 질문, 선택지, 해설, 주제명은 반드시 한국어로 작성한다.
+- title, question, choices, explanation, topic에는 PDF 페이지 번호나 "몇 페이지", "p.12", "12쪽" 같은 출처 위치 표현을 절대 쓰지 않는다.
+- 페이지 정보는 evidence.page 필드에만 기록하고, 학습자가 보는 문항 본문에는 드러내지 않는다.
 - 문항은 반드시 학습 내용의 개념 관계, 원리, 비교, 적용, 오개념 교정을 묻는다.
 - 메모가 존재하면 전체 문항의 최소 60%는 source가 note 또는 mixed여야 한다.
 - 메모가 짧거나 모호하면 같은 페이지 또는 주변 페이지의 PDF 원문으로 개념을 확장해 출제한다.
@@ -51,6 +53,7 @@ JSON만 출력해서 퀴즈를 생성해라.
 - 단순 용어 뜻만 묻는 문제.
 - 자료 자체를 묻는 메타 질문.
   예: "어디 페이지가 중요한가요?", "어떤 페이지를 봐야 하나요?"
+- "3페이지에서 설명한 내용", "5쪽의 개념", "p.7에 따르면"처럼 페이지를 언급하는 표현.
 - 메모 내용을 그대로 암기시키는 문제.
 - 정답이 너무 티 나는 객관식.
 - "다음 중 옳은 것은?" 패턴만 반복하는 문제.
@@ -108,16 +111,20 @@ ${JSON.stringify(sourcePages, null, 2)}
 
 export function buildQuizCritiquePrompt(
   quizJson: unknown,
-  notesContext: NotesContext,
-  sourcePages: QuizSourcePage[]
+  notesContext: NotesContext
 ) {
+  const hasNotes = notesContext.some((n) => n.note.trim().length > 0);
+  const noteCriterion = hasNotes
+    ? "- noteAlignment: 사용자 메모 또는 메모 의도를 반영하는가."
+    : "- noteAlignment: 사용자 메모가 없으므로 감점 기준에서 제외한다.";
+
   return `
 다음 퀴즈를 개념 이해형 학습 문제 기준으로 검수해라.
 JSON 객체 하나만 출력한다.
 
 평가 기준:
-- noteAlignment: 사용자 메모 또는 메모 의도를 반영하는가.
-- grounding: 제공 근거와 충돌하지 않고 evidence가 충분한가.
+${noteCriterion}
+- grounding: 각 문항의 evidence.quote와 explanation이 서로 충돌하지 않는가.
 - conceptualDepth: 단순 암기보다 개념 관계/원리/적용/비교를 묻는가.
 - answerClarity: 정답이 명확하고 모호하지 않은가.
 - distractorQuality: 객관식 오답이 그럴듯하지만 명확히 틀리는가.
@@ -139,17 +146,16 @@ JSON 객체 하나만 출력한다.
 규칙:
 - index는 0부터 시작한다.
 - score는 1~5 정수다.
-- score가 3 이하이거나 regenerate가 true인 문항은 regenerateIndexes에 포함한다.
-- 너무 얕은 정의 암기형 문항은 반드시 재생성 대상으로 표시한다.
+- score가 2 이하이거나 regenerate가 true인 문항만 regenerateIndexes에 포함한다.
+- score 3은 치명적 오류가 없으면 재생성 대상으로 표시하지 않는다.
+- 정답이 모호하거나 evidence와 충돌하거나 단순 정의 암기형인 문항은 재생성 대상으로 표시한다.
+- 검수는 PDF 원문 전체가 아니라 퀴즈 JSON의 evidence.quote와 사용자 메모만 기준으로 빠르게 수행한다.
 
 [퀴즈 JSON]
 ${JSON.stringify(quizJson, null, 2)}
 
 [사용자 메모]
 ${JSON.stringify(notesContext, null, 2)}
-
-[메모 관련 PDF 원문/주변 페이지]
-${JSON.stringify(sourcePages, null, 2)}
 `.trim();
 }
 

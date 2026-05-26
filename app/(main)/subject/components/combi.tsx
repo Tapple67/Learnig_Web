@@ -13,7 +13,6 @@ import type {
   Grade,
   Material,
   QuizSetCard,
-  SelectedMaterial,
   SortOrder,
   Subject,
 } from "../types";
@@ -33,7 +32,6 @@ export default function Combi({
   selectedGradeId,
   selectedSubjectId,
   selectedMaterialId,
-  selectedMaterial,
   quizSets,
 }: {
   grades: Grade[];
@@ -42,7 +40,6 @@ export default function Combi({
   selectedGradeId?: string;
   selectedSubjectId?: string;
   selectedMaterialId?: string;
-  selectedMaterial: SelectedMaterial | null;
   quizSets: QuizSetCard[];
 }) {
   const router = useRouter();
@@ -71,16 +68,6 @@ export default function Combi({
 
   const subjectState = useSubjectPanelState();
 
-  const summaryItem = selectedMaterial?.summary
-    ? {
-        id: selectedMaterial.summary.id,
-        type: "summary" as const,
-        title: `${selectedMaterial.title} 요약본`,
-        createdAt: selectedMaterial.summary.updatedAt,
-        meta: `${selectedMaterial.summary.provider ?? "AI"} ${selectedMaterial.summary.model ?? ""}`.trim(),
-      }
-    : null;
-
   const mergedContent = useMemo(() => {
     const quizItems = quizSets.map((q) => ({
       id: q.id,
@@ -91,7 +78,7 @@ export default function Combi({
       latestAttempt: q.latestAttempt,
     }));
 
-    const all = [...(summaryItem ? [summaryItem] : []), ...quizItems];
+    const all = quizItems;
     const filtered = all.filter((it) => (filter === "all" ? true : it.type === filter));
 
     filtered.sort((a, b) => {
@@ -101,7 +88,7 @@ export default function Combi({
     });
 
     return filtered;
-  }, [quizSets, summaryItem, filter, sortOrder]);
+  }, [quizSets, filter, sortOrder]);
 
   function pushWith(next: { gradeId?: string; subjectId?: string; materialId?: string }) {
     const p = new URLSearchParams();

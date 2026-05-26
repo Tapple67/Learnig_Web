@@ -8,26 +8,51 @@ const tokenize = (s: string) =>
     .map((x) => x.trim())
     .filter((x) => x.length >= 2);
 
-function gradeOne(item: { type: string; points: number; answerKey: any }, response: any) {
+type AnswerKey = {
+  correctIndex?: unknown;
+  correct?: unknown;
+  accepted?: unknown;
+};
+
+type QuizResponse = {
+  selectedIndex?: unknown;
+  value?: unknown;
+  text?: unknown;
+};
+
+function asQuizResponse(response: unknown): QuizResponse {
+  return response && typeof response === "object" ? response : {};
+}
+
+function asAnswerKey(answerKey: unknown): AnswerKey {
+  return answerKey && typeof answerKey === "object" ? answerKey : {};
+}
+
+function gradeOne(item: { type: string; points: number; answerKey: unknown }, response: unknown) {
   const pts = item.points ?? 1;
+  const answerKey = asAnswerKey(item.answerKey);
+  const responseValue = asQuizResponse(response);
 
   if (item.type === "mcq") {
-    const correctIndex = Number(item.answerKey?.correctIndex);
-    const selectedIndex = Number(response?.selectedIndex);
-    const ok = Number.isFinite(correctIndex) && selectedIndex === correctIndex;
+    const correctIndex = Number(answerKey.correctIndex);
+    const selectedIndex = responseValue.selectedIndex;
+    const ok =
+      Number.isFinite(correctIndex) &&
+      typeof selectedIndex === "number" &&
+      selectedIndex === correctIndex;
     return { isCorrect: ok, earned: ok ? pts : 0 };
   }
 
   if (item.type === "tf") {
-    const correct = Boolean(item.answerKey?.correct);
-    const value = Boolean(response?.value);
-    const ok = value === correct;
+    const correct = Boolean(answerKey.correct);
+    const value = responseValue.value;
+    const ok = typeof value === "boolean" && value === correct;
     return { isCorrect: ok, earned: ok ? pts : 0 };
   }
 
   if (item.type === "short") {
-    const accepted: string[] = Array.isArray(item.answerKey?.accepted) ? item.answerKey.accepted : [];
-    const text = typeof response?.text === "string" ? response.text : "";
+    const accepted: string[] = Array.isArray(answerKey.accepted) ? answerKey.accepted : [];
+    const text = typeof responseValue.text === "string" ? responseValue.text : "";
     const textNorm = norm(text);
     const exact = accepted.map(norm).some((a) => a === textNorm);
 

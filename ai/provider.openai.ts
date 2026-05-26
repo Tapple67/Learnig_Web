@@ -29,13 +29,14 @@ function reasoningEffortFromEnv(value: string | undefined, fallback: Exclude<Rea
 
 const QUIZ_GENERATOR_REASONING = reasoningEffortFromEnv(
   process.env.OPENAI_QUIZ_REASONING_EFFORT,
-  "medium"
+  "low"
 );
 const QUIZ_CRITIC_REASONING = reasoningEffortFromEnv(
   process.env.OPENAI_QUIZ_CRITIC_REASONING_EFFORT,
-  "low"
+  "minimal"
 );
 const SUMMARY_REASONING = reasoningEffortFromEnv(process.env.OPENAI_SUMMARY_REASONING_EFFORT, "low");
+const QUIZ_CRITIQUE_ENABLED = process.env.OPENAI_QUIZ_CRITIQUE_ENABLED === "true";
 
 const QuizItemSchema = z.object({
   type: z.enum(["mcq", "tf", "short"]),
@@ -263,7 +264,7 @@ function expectedItemCount(spec: { mcqCount: number; tfCount: number; shortCount
 }
 
 function hasLowQualityItems(critique: z.infer<typeof QuizCritiqueSchema>) {
-  return critique.items.some((item) => item.score <= 3 || item.regenerate);
+  return critique.items.some((item) => item.score <= 2 || item.regenerate);
 }
 
 export const OpenAIProvider: AIProvider = {
@@ -311,31 +312,33 @@ export const OpenAIProvider: AIProvider = {
     }
 
     const hasAnyNote = notes.some((n) => n.note.trim().length > 0);
-    if (hasAnyNote && noteCoverage(validated.items) < 0.5) {
+    if (hasAnyNote && noteCoverage(validated.items) < 0.4) {
       const retryPrompt = `${prompt}\n\n중요: note 또는 mixed evidence 비율을 최소 50% 이상으로 높여서 다시 생성해라.`;
       validated = await parseJsonWithRepair(retryPrompt, QuizSchema, generatorOptions);
     }
 
-    try {
-      const critique = await parseJsonWithRepair(
-        buildQuizCritiquePrompt(validated, notes, sourcePages),
-        QuizCritiqueSchema,
-        {
-          model: QUIZ_CRITIC_MODEL,
-          reasoningEffort: QUIZ_CRITIC_REASONING,
-          responseFormat: QuizCritiqueResponseFormat,
-        }
-      );
-
-      if (hasLowQualityItems(critique)) {
-        validated = await parseJsonWithRepair(
-          buildQuizRepairPrompt(prompt, validated, critique),
-          QuizSchema,
-          generatorOptions
+    if (QUIZ_CRITIQUE_ENABLED) {
+      try {
+        const critique = await parseJsonWithRepair(
+          buildQuizCritiquePrompt(validated, notes),
+          QuizCritiqueSchema,
+          {
+            model: QUIZ_CRITIC_MODEL,
+            reasoningEffort: QUIZ_CRITIC_REASONING,
+            responseFormat: QuizCritiqueResponseFormat,
+          }
         );
+
+        if (hasLowQualityItems(critique)) {
+          validated = await parseJsonWithRepair(
+            buildQuizRepairPrompt(prompt, validated, critique),
+            QuizSchema,
+            generatorOptions
+          );
+        }
+      } catch {
+        // Critique improves quality, but quiz generation should not fail only because review failed.
       }
-    } catch {
-      // Critique improves quality, but quiz generation should not fail only because review failed.
     }
 
     const items = validated.items.map((it) => {

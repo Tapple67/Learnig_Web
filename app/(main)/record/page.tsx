@@ -11,7 +11,10 @@ import { usePdf } from "./hooks/use_pdf";
 export default function Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const queryPage = Number(searchParams.get("page") ?? 1);
+    return Number.isFinite(queryPage) && queryPage > 0 ? Math.floor(queryPage) : 1;
+  });
   const [msg, setMsg] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -97,7 +100,17 @@ export default function Page() {
       router.push(returnTo);
       return;
     }
-    router.push("/subject");
+
+    const p = new URLSearchParams();
+    const gradeId = searchParams.get("gradeId");
+    const subjectId = searchParams.get("subjectId");
+    const materialId = searchParams.get("materialId");
+    if (gradeId) p.set("gradeId", gradeId);
+    if (subjectId) p.set("subjectId", subjectId);
+    if (materialId) p.set("materialId", materialId);
+
+    const qs = p.toString();
+    router.push(qs ? `/subject?${qs}` : "/subject");
   }
 
   return (
