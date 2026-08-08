@@ -1,6 +1,6 @@
 // lib/stats/utils.ts
 
-import type { QuizType, TopicStat, TypeStat, UnderstandingResult } from "../types";
+import type { PurposeStat, QuizPurpose, QuizType, TopicStat, TypeStat, UnderstandingResult } from "../types";
 
 export function round1(n: number) {
   return Math.round(n * 10) / 10;
@@ -82,4 +82,17 @@ export function buildRecommendations(params: {
   }
 
   return Array.from(new Set(messages)).slice(0, 5);
+}
+
+export function getEmptyPurposeStats(): Record<QuizPurpose, PurposeStat> {
+  return {
+    GENERAL: { attempts: 0, total: 0, correct: 0, wrong: 0, accuracy: 0 },
+    WRONG_REVIEW: { attempts: 0, total: 0, correct: 0, wrong: 0, accuracy: 0 },
+    WEAK_TOPIC: { attempts: 0, total: 0, correct: 0, wrong: 0, accuracy: 0 },
+  };
+}
+
+export function normalizeQuizPurpose(value: unknown): QuizPurpose {
+  if (value === "WRONG_REVIEW" || value === "WEAK_TOPIC") return value;
+  return "GENERAL";
 }

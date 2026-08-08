@@ -25,7 +25,7 @@ export type MaterialPacket = {
   pages: MaterialPagePacket[];
 };
 
-export const SUMMARY_PROMPT_VERSION = "summary.v2";
+export const SUMMARY_PROMPT_VERSION = "summary.v6";
 
 export async function buildMaterialPacket(materialId: string): Promise<MaterialPacket> {
   const material = await prisma.material.findUnique({
@@ -90,7 +90,6 @@ export function computeMaterialSourceHash(packet: MaterialPacket) {
       pdfText: p.pdfText,
       note: p.note,
       noteSignals: p.noteSignals,
-      noteUpdatedAt: p.noteUpdatedAt,
     })),
   };
   return sha256(JSON.stringify(stable));

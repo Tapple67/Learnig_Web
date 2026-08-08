@@ -1,5 +1,8 @@
 ﻿"use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { REVIEW_QUIZ_SPEC } from "@/app/(main)/quiz/constants";
 import type { MaterialStatsResponse } from "@/app/(main)/stats/types";
 
 function pct(n: number) {
@@ -32,8 +35,11 @@ function ProgressBar(props: { value: number }) {
   );
 }
 
-export default function MaterialStatsView(props: { data: MaterialStatsResponse }) {
-  const { data } = props;
+export default function MaterialStatsView(props: { data: MaterialStatsResponse; returnTo?: string }) {
+  const { data, returnTo = "/subject" } = props;
+  const router = useRouter();
+  const [creatingWeakQuiz, setCreatingWeakQuiz] = useState(false);
+  const [actionError, setActionError] = useState("");
   const recentTrend = [...data.trend].reverse();
   const weakTopics = [...data.weakTopics]
     .sort((a, b) => {
@@ -44,6 +50,33 @@ export default function MaterialStatsView(props: { data: MaterialStatsResponse }
     })
     .slice(0, 5);
   const recommendations = data.recommendations.slice(0, 3);
+  const weakTopicNames = weakTopics.map((topic) => topic.topic).slice(0, 5);
+
+  async function createWeakTopicQuiz() {
+    if (weakTopicNames.length === 0 || creatingWeakQuiz) return;
+
+    setCreatingWeakQuiz(true);
+    setActionError("");
+    try {
+      const res = await fetch("/api/quiz/quiz-sets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          materialId: data.material.id,
+          purpose: "WEAK_TOPIC",
+          sourceTopics: weakTopicNames,
+          spec: REVIEW_QUIZ_SPEC,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? "약점 퀴즈 생성 실패");
+      router.push(`/quiz/take/${json.quizSetId}?mode=new&returnTo=${encodeURIComponent(returnTo)}`);
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : "오류");
+    } finally {
+      setCreatingWeakQuiz(false);
+    }
+  }
 
   return (
     <div className="grid h-full min-h-0 grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[320px_1fr]">
@@ -75,6 +108,24 @@ export default function MaterialStatsView(props: { data: MaterialStatsResponse }
 
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
           {data.understanding.message}
+        </div>
+
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-xs font-semibold text-slate-700">퀴즈 흐름별 정답률</div>
+          <div className="mt-3 space-y-2 text-xs text-slate-600">
+            {[
+              { key: "GENERAL", label: "일반", stat: data.purposeStats.GENERAL },
+              { key: "WRONG_REVIEW", label: "오답 복습", stat: data.purposeStats.WRONG_REVIEW },
+              { key: "WEAK_TOPIC", label: "약점 집중", stat: data.purposeStats.WEAK_TOPIC },
+            ].map((row) => (
+              <div key={row.key} className="flex items-center justify-between gap-2">
+                <span>{row.label}</span>
+                <span className="font-medium text-slate-900">
+                  {row.stat.accuracy}% · {row.stat.correct}/{row.stat.total}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </aside>
 
@@ -122,7 +173,18 @@ export default function MaterialStatsView(props: { data: MaterialStatsResponse }
 
         <div className="min-h-0 space-y-4 overflow-y-auto pr-1 xl:col-span-6">
           <div className="min-h-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-sm font-semibold text-slate-900">약한 주제</div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-slate-900">약한 주제</div>
+              <button
+                type="button"
+                onClick={() => void createWeakTopicQuiz()}
+                disabled={weakTopicNames.length === 0 || creatingWeakQuiz}
+                className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-900 hover:bg-cyan-100 disabled:opacity-40"
+              >
+                {creatingWeakQuiz ? "생성 중..." : "약점 퀴즈"}
+              </button>
+            </div>
+            {actionError && <div className="mt-2 text-xs text-rose-600">{actionError}</div>}
             {weakTopics.length === 0 ? (
               <div className="mt-3 text-sm text-slate-500">반복 오답 주제가 아직 없습니다.</div>
             ) : (

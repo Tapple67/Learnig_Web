@@ -3,6 +3,8 @@ import { getUserId } from "@/lib/auth";
 import { assertMaterialOwnedByUser, assertQuizSetOwnedByUser } from "@/lib/authz";
 import { generateAndSaveQuiz } from "@/app/(main)/quiz/hooks/use_quiz";
 import { prisma } from "@/lib/db";
+import { asTopicList } from "@/app/(main)/quiz/hooks/use_quiz_focus";
+import type { QuizPurpose } from "@/app/(main)/quiz/hooks/use_quiz_focus";
 
 export const runtime = "nodejs";
 
@@ -24,6 +26,11 @@ function pickLatestAttempt(attempts: AttemptCard[]) {
   return submitted ?? attempts[0] ?? null;
 }
 
+function normalizePurpose(value: unknown): QuizPurpose {
+  if (value === "WRONG_REVIEW" || value === "WEAK_TOPIC") return value;
+  return "GENERAL";
+}
+
 export async function POST(req: Request) {
   const userId = await getUserId();
   if (!userId) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
@@ -36,7 +43,17 @@ export async function POST(req: Request) {
     await assertMaterialOwnedByUser({ userId, materialId });
 
     const spec = body?.spec ?? undefined;
-    const result = await generateAndSaveQuiz({ materialId, spec });
+    const purpose = normalizePurpose(body?.purpose);
+    const sourceAttemptId = String(body?.sourceAttemptId ?? "").trim() || undefined;
+    const sourceTopics = asTopicList(body?.sourceTopics);
+    const result = await generateAndSaveQuiz({
+      userId,
+      materialId,
+      spec,
+      purpose,
+      sourceAttemptId,
+      sourceTopics,
+    });
 
     return NextResponse.json({ ok: true, ...result });
   } catch (e: unknown) {

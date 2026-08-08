@@ -4,8 +4,10 @@ import { prisma } from "@/lib/db";
 import type { MaterialStatsResponse, QuizType, TopicStat } from "../types";
 import {
   buildRecommendations,
+  getEmptyPurposeStats,
   getEmptyTypeStats,
   getUnderstandingLevel,
+  normalizeQuizPurpose,
   round1,
   toPercent,
 } from "../utils/stats_utils";
@@ -124,6 +126,7 @@ export async function getMaterialStats(params: {
         message: "아직 제출된 퀴즈 결과가 없습니다.",
       },
       typeStats: getEmptyTypeStats(),
+      purposeStats: getEmptyPurposeStats(),
       trend: [],
       weakTopics: [],
       recommendations: ["먼저 이 파일에 대해 퀴즈를 풀어보세요."],
@@ -138,10 +141,16 @@ export async function getMaterialStats(params: {
   const scoreList: number[] = [];
   const trend: MaterialStatsResponse["trend"] = [];
   const typeStats = getEmptyTypeStats();
+  const purposeStats = getEmptyPurposeStats();
 
   const topicMap = new Map<string, { total: number; correct: number; wrong: number }>();
+  const purposeRows = await prisma.$queryRaw<Array<{ id: string; purpose: string }>>`
+    SELECT "id", "purpose" FROM "QuizSet" WHERE "materialId" = ${materialId}
+  `;
+  const purposeMap = new Map(purposeRows.map((row) => [row.id, row.purpose]));
 
   for (const quizSet of quizSets) {
+    const purpose = normalizeQuizPurpose(purposeMap.get(quizSet.id));
     const itemMap = new Map(
       quizSet.items.map((item) => [
         item.id,
@@ -154,6 +163,7 @@ export async function getMaterialStats(params: {
 
     for (const attempt of quizSet.attempts) {
       totalAttempts += 1;
+      purposeStats[purpose].attempts += 1;
 
       const score = attempt.score ?? 0;
       const maxScore = attempt.maxScore ?? 0;
@@ -165,6 +175,7 @@ export async function getMaterialStats(params: {
         score,
         maxScore,
         accuracy: maxScore > 0 ? toPercent(score, maxScore) : 0,
+        purpose,
       });
 
       for (const answer of attempt.answers) {
@@ -178,6 +189,10 @@ export async function getMaterialStats(params: {
         const isCorrect = answer.isCorrect === true;
         if (isCorrect) totalCorrect += 1;
         else totalWrong += 1;
+
+        purposeStats[purpose].total += 1;
+        if (isCorrect) purposeStats[purpose].correct += 1;
+        else purposeStats[purpose].wrong += 1;
 
         typeStats[quizType].total += 1;
         if (isCorrect) typeStats[quizType].correct += 1;
@@ -194,6 +209,11 @@ export async function getMaterialStats(params: {
 
   for (const key of Object.keys(typeStats) as QuizType[]) {
     const s = typeStats[key];
+    s.accuracy = toPercent(s.correct, s.total);
+  }
+
+  for (const key of Object.keys(purposeStats) as Array<keyof typeof purposeStats>) {
+    const s = purposeStats[key];
     s.accuracy = toPercent(s.correct, s.total);
   }
 
@@ -251,6 +271,7 @@ export async function getMaterialStats(params: {
     },
     understanding,
     typeStats,
+    purposeStats,
     trend,
     weakTopics,
     recommendations,

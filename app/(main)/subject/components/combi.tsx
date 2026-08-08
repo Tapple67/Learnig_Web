@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DEFAULT_QUIZ_SPEC } from "@/app/(main)/quiz/constants";
 import Modal from "@/app/components/ui/Modal";
 import MaterialStatsModal from "@/app/(main)/stats/components/MaterialStatsModal";
 import SubjectPanel from "./SubjectPanel";
 import MoreActionsMenu from "./MoreActionsMenu";
+import SummaryContent, { formatTopicChip, getSummaryTopics } from "./SummaryContent";
 import { useSubjectPanelState } from "../hooks/use_subject_panel_state";
 import { formatDaysAgo } from "../utils/date";
 import type {
@@ -13,6 +15,7 @@ import type {
   Grade,
   Material,
   QuizSetCard,
+  SummaryCard,
   SortOrder,
   Subject,
 } from "../types";
@@ -25,6 +28,10 @@ function toKoreanQuizStatus(status?: string | null) {
   return "생성됨";
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function Combi({
   grades,
   subjects,
@@ -32,6 +39,7 @@ export default function Combi({
   selectedGradeId,
   selectedSubjectId,
   selectedMaterialId,
+  summary,
   quizSets,
 }: {
   grades: Grade[];
@@ -40,6 +48,7 @@ export default function Combi({
   selectedGradeId?: string;
   selectedSubjectId?: string;
   selectedMaterialId?: string;
+  summary: SummaryCard | null;
   quizSets: QuizSetCard[];
 }) {
   const router = useRouter();
@@ -65,10 +74,30 @@ export default function Combi({
   const [deleteQuizOpen, setDeleteQuizOpen] = useState(false);
   const [editingQuizSetId, setEditingQuizSetId] = useState("");
   const [editQuizTitle, setEditQuizTitle] = useState("");
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const subjectState = useSubjectPanelState();
 
   const mergedContent = useMemo(() => {
+    const summaryItems = summary
+      ? [
+          {
+            id: summary.id,
+            type: "summary" as const,
+            title: summary.title,
+            createdAt: summary.updatedAt,
+            meta:
+              summary.isStale
+                ? "요약 갱신 필요"
+                : summary.noteCount > 0
+                ? `메모 ${summary.noteCount}개 반영`
+            : "열람 가능한 요약본",
+            content: summary.content,
+            topics: getSummaryTopics(summary.content).slice(0, 3),
+          },
+        ]
+      : [];
+
     const quizItems = quizSets.map((q) => ({
       id: q.id,
       type: "quiz" as const,
@@ -78,7 +107,7 @@ export default function Combi({
       latestAttempt: q.latestAttempt,
     }));
 
-    const all = quizItems;
+    const all = [...summaryItems, ...quizItems];
     const filtered = all.filter((it) => (filter === "all" ? true : it.type === filter));
 
     filtered.sort((a, b) => {
@@ -88,7 +117,7 @@ export default function Combi({
     });
 
     return filtered;
-  }, [quizSets, filter, sortOrder]);
+  }, [quizSets, summary, filter, sortOrder]);
 
   function pushWith(next: { gradeId?: string; subjectId?: string; materialId?: string }) {
     const p = new URLSearchParams();
@@ -161,8 +190,8 @@ export default function Combi({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? "파일 업로드 실패");
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "파일 업로드 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "파일 업로드 실패"));
     } finally {
       setBusy(false);
     }
@@ -183,8 +212,8 @@ export default function Combi({
       subjectState.setAddOpen(false);
       subjectState.setNewName("");
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "과목 추가 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "과목 추가 실패"));
     } finally {
       setBusy(false);
     }
@@ -207,8 +236,8 @@ export default function Combi({
       if (!res.ok) throw new Error(data?.error ?? "과목 수정 실패");
       subjectState.setEditOpen(false);
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "과목 수정 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "과목 수정 실패"));
     } finally {
       setBusy(false);
     }
@@ -228,8 +257,8 @@ export default function Combi({
       if (!res.ok) throw new Error(data?.error ?? "과목 삭제 실패");
       subjectState.setDeleteOpen(false);
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "과목 삭제 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "과목 삭제 실패"));
     } finally {
       setBusy(false);
     }
@@ -261,8 +290,8 @@ export default function Combi({
       if (!res.ok) throw new Error(data?.error ?? "파일 수정 실패");
       setEditMaterialOpen(false);
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "파일 수정 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "파일 수정 실패"));
     } finally {
       setBusy(false);
     }
@@ -278,8 +307,8 @@ export default function Combi({
       if (!res.ok) throw new Error(data?.error ?? "파일 삭제 실패");
       setDeleteMaterialOpen(false);
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "파일 삭제 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "파일 삭제 실패"));
     } finally {
       setBusy(false);
     }
@@ -297,9 +326,10 @@ export default function Combi({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? "요약 생성 실패");
+      setSummaryOpen(true);
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "요약 생성 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "요약 생성 실패"));
     } finally {
       setBusy(false);
     }
@@ -315,14 +345,14 @@ export default function Combi({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           materialId: selectedMaterialId,
-          spec: { mcqCount: 6, tfCount: 3, shortCount: 1 },
+          spec: DEFAULT_QUIZ_SPEC,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error ?? "퀴즈 생성 실패");
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "퀴즈 생성 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "퀴즈 생성 실패"));
     } finally {
       setBusy(false);
     }
@@ -353,8 +383,8 @@ export default function Combi({
       if (!res.ok) throw new Error(data?.error ?? "퀴즈 수정 실패");
       setEditQuizOpen(false);
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "퀴즈 수정 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "퀴즈 수정 실패"));
     } finally {
       setBusy(false);
     }
@@ -374,8 +404,8 @@ export default function Combi({
       if (!res.ok) throw new Error(data?.error ?? "퀴즈 삭제 실패");
       setDeleteQuizOpen(false);
       router.refresh();
-    } catch (e: any) {
-      setMsg(e?.message ?? "퀴즈 삭제 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "퀴즈 삭제 실패"));
     } finally {
       setBusy(false);
     }
@@ -399,8 +429,8 @@ export default function Combi({
 
       setStatsMaterialId(firstMaterialId);
       setStatsOpen(true);
-    } catch (e: any) {
-      setMsg(e?.message ?? "통계 조회 실패");
+    } catch (e: unknown) {
+      setMsg(getErrorMessage(e, "통계 조회 실패"));
     } finally {
       setBusy(false);
     }
@@ -572,7 +602,7 @@ export default function Combi({
             <h2 className="text-sm font-semibold text-slate-900">컨텐츠</h2>
             <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex gap-2">
-                <button type="button" disabled={!selectedMaterialId || busy} onClick={() => void createSummary()} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-50">요약</button>
+                <button type="button" disabled={!selectedMaterialId || busy} onClick={() => void createSummary()} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-50">{summary ? "요약 갱신" : "요약 생성"}</button>
                 <button type="button" disabled={!selectedMaterialId || busy} onClick={() => void createQuiz()} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-100 disabled:opacity-50">퀴즈</button>
               </div>
             </div>
@@ -609,7 +639,12 @@ export default function Combi({
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 text-xs text-slate-600">{item.meta}</div>
+                  <div className={item.type === "summary" && summary?.isStale ? "mt-2 text-xs font-medium text-amber-700" : "mt-2 text-xs text-slate-600"}>{item.meta}</div>
+                  {item.type === "summary" && summary?.isStale && (
+                    <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                      메모나 자료 변경 사항이 아직 요약에 반영되지 않았습니다.
+                    </div>
+                  )}
 
                   {item.type === "quiz" && (
                     <div className="mt-2 flex gap-2">
@@ -644,8 +679,47 @@ export default function Combi({
                       </button>
                     </div>
                   )}
+
+                  {item.type === "summary" && (
+                    <div className="mt-3 space-y-3">
+                      {item.topics.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.topics.map((topic) => (
+                            <span key={topic} className="rounded-md bg-slate-100 px-2 py-1 text-[11px] text-slate-700">
+                              {formatTopicChip(topic)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSummaryOpen(true)}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs hover:bg-slate-50"
+                        >
+                          열람
+                        </button>
+                        {summary?.isStale && (
+                          <button
+                            type="button"
+                            onClick={() => void createSummary()}
+                            disabled={busy}
+                            className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                          >
+                            갱신
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
+
+              {selectedMaterialId && mergedContent.length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+                  요약이나 퀴즈를 생성하면 여기에 표시됩니다.
+                </div>
+              )}
             </div>
             </div>
           </section>
@@ -683,10 +757,57 @@ export default function Combi({
         <div className="text-sm text-slate-700">선택한 퀴즈를 삭제할까요?</div>
       </Modal>
 
+      <Modal
+        open={summaryOpen && !!summary}
+        onClose={() => setSummaryOpen(false)}
+        title={summary?.title ?? "요약본"}
+        panelClassName="max-w-[min(1120px,94vw)]"
+        bodyClassName="max-h-[82vh] overflow-auto bg-white px-0 py-0"
+      >
+        {summary && (
+          <div>
+            <div className="border-b border-slate-200 bg-white px-5 py-2.5 sm:px-8">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span className="rounded-md bg-white px-2 py-1 ring-1 ring-slate-200">
+                업데이트 {formatDaysAgo(summary.updatedAt)}
+              </span>
+              {summary.isStale && (
+                <span className="rounded-md bg-amber-50 px-2 py-1 text-amber-700 ring-1 ring-amber-200">
+                  요약 갱신 필요
+                </span>
+              )}
+              {summary.noteCount > 0 && (
+                <span className="rounded-md bg-lime-50 px-2 py-1 text-lime-700 ring-1 ring-lime-200">
+                  메모 {summary.noteCount}개 반영
+                </span>
+              )}
+              {summary.isStale && (
+                <button
+                  type="button"
+                  onClick={() => void createSummary()}
+                  disabled={busy}
+                  className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                >
+                  지금 갱신
+                </button>
+              )}
+              </div>
+              {summary.isStale && (
+                <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                  현재 표시된 요약은 이전 PDF/메모 기준일 수 있습니다. 최신 메모 반영 요약을 보려면 갱신하세요.
+                </div>
+              )}
+            </div>
+            <SummaryContent content={summary.content} />
+          </div>
+        )}
+      </Modal>
+
       <MaterialStatsModal
         materialId={statsMaterialId}
         open={statsOpen}
         onClose={() => setStatsOpen(false)}
+        returnTo={subjectReturnTo}
       />
     </div>
   );

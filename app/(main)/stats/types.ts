@@ -17,6 +17,16 @@ export type TopicStat = {
   accuracy: number;
 };
 
+export type QuizPurpose = "GENERAL" | "WRONG_REVIEW" | "WEAK_TOPIC";
+
+export type PurposeStat = {
+  attempts: number;
+  total: number;
+  correct: number;
+  wrong: number;
+  accuracy: number;
+};
+
 export type UnderstandingResult = {
   level: "NONE" | "HIGH" | "MID_HIGH" | "MID_LOW" | "LOW";
   label: string;
@@ -46,12 +56,14 @@ export type MaterialStatsResponse = {
   };
   understanding: UnderstandingResult;
   typeStats: Record<QuizType, TypeStat>;
+  purposeStats: Record<QuizPurpose, PurposeStat>;
   trend: Array<{
     attemptId: string;
     submittedAt: string | null;
     score: number;
     maxScore: number;
     accuracy: number;
+    purpose: QuizPurpose;
   }>;
   weakTopics: TopicStat[];
   recommendations: string[];

@@ -1,6 +1,8 @@
-﻿import { prisma } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { getAIProvider } from "@/ai";
+import { DEFAULT_QUIZ_SPEC } from "@/app/(main)/quiz/constants";
 import { ensureMaterialSummary } from "@/app/(main)/quiz/hooks/use_summary";
+import { resolveQuizFocus, type QuizPurpose } from "@/app/(main)/quiz/hooks/use_quiz_focus";
 import { buildMaterialPacket } from "@/app/(main)/quiz/utils/material_packet";
 import { Prisma } from "@prisma/client";
 
@@ -13,9 +15,18 @@ function truncateForQuizContext(text: string, limit = QUIZ_SOURCE_TEXT_LIMIT) {
   return `${normalized.slice(0, limit)}...`;
 }
 
-function buildQuizSourcePages(packet: Awaited<ReturnType<typeof buildMaterialPacket>>) {
+function buildQuizSourcePages(
+  packet: Awaited<ReturnType<typeof buildMaterialPacket>>,
+  preferredPages: number[] = []
+) {
   const notePages = packet.pages.filter((p) => p.note.trim().length > 0);
   const wantedPages = new Set<number>();
+
+  for (const page of preferredPages) {
+    wantedPages.add(page);
+    wantedPages.add(page - 1);
+    wantedPages.add(page + 1);
+  }
 
   for (const p of notePages) {
     wantedPages.add(p.page);
@@ -77,19 +88,31 @@ function normalizePointsTo100(source: Array<{ points?: number }>): number[] {
 }
 
 export async function generateAndSaveQuiz(params: {
+  userId?: string;
   materialId: string;
   spec?: { mcqCount: number; tfCount: number; shortCount: number };
+  purpose?: QuizPurpose;
+  sourceAttemptId?: string;
+  sourceTopics?: string[];
 }) {
-  const spec = params.spec ?? { mcqCount: 5, tfCount: 3, shortCount: 2 };
+  const spec = params.spec ?? DEFAULT_QUIZ_SPEC;
+  const purpose = params.purpose ?? "GENERAL";
+  const { focus, sourceTopics, sourceItemIds, preferredPages } = await resolveQuizFocus({
+    userId: params.userId,
+    materialId: params.materialId,
+    purpose,
+    sourceAttemptId: params.sourceAttemptId,
+    sourceTopics: params.sourceTopics,
+  });
 
   const { summaryId, sourceHash, content, packet } = await ensureMaterialSummary(params.materialId);
   const notes = packet.pages
     .filter((p) => p.note.length > 0)
     .map((p) => ({ page: p.page, note: p.note, signals: p.noteSignals }));
-  const sourcePages = buildQuizSourcePages(packet);
+  const sourcePages = buildQuizSourcePages(packet, preferredPages);
 
   const ai = getAIProvider();
-  const quiz = await ai.generateQuiz({ summary: content, notes, sourcePages, spec });
+  const quiz = await ai.generateQuiz({ summary: content, notes, sourcePages, spec, focus });
 
   if (!quiz?.items?.length) throw new Error("Quiz items empty");
 
@@ -128,6 +151,16 @@ export async function generateAndSaveQuiz(params: {
       },
       select: { id: true, createdAt: true },
     });
+
+    await tx.$executeRaw`
+      UPDATE "QuizSet"
+      SET
+        "purpose" = ${purpose},
+        "sourceAttemptId" = ${params.sourceAttemptId ?? null},
+        "sourceTopics" = CAST(${sourceTopics.length > 0 ? JSON.stringify(sourceTopics) : null} AS jsonb),
+        "sourceItemIds" = CAST(${sourceItemIds.length > 0 ? JSON.stringify(sourceItemIds) : null} AS jsonb)
+      WHERE "id" = ${quizSet.id}
+    `;
     return quizSet;
   });
 

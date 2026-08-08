@@ -1,5 +1,13 @@
-﻿export const DEFAULT_QUIZ_SPEC = {
+import type { QuizSpec } from "./types";
+
+export const DEFAULT_QUIZ_SPEC: QuizSpec = {
   mcqCount: 6,
   tfCount: 3,
   shortCount: 1,
-} as const;
+};
+
+export const REVIEW_QUIZ_SPEC: QuizSpec = {
+  mcqCount: 5,
+  tfCount: 3,
+  shortCount: 2,
+};

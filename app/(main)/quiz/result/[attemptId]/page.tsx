@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { REVIEW_QUIZ_SPEC } from "@/app/(main)/quiz/constants";
 
 type QuizItem = {
   id: string;
@@ -30,6 +31,8 @@ export default function QuizResultPage() {
   const [msg, setMsg] = useState("");
   const [attempt, setAttempt] = useState<any>(null);
   const [idx, setIdx] = useState(0);
+  const [creatingReview, setCreatingReview] = useState(false);
+  const [actionError, setActionError] = useState("");
 
   const sp = useSearchParams();
   const returnTo = sp.get("returnTo") || "/quiz";
@@ -69,6 +72,10 @@ export default function QuizResultPage() {
 
   const current = items[idx] ?? null;
   const currentAnswer = current ? (answerMap.get(current.id) ?? null) : null;
+  const wrongCount = useMemo(
+    () => answers.filter((answer) => answer.isCorrect === false).length,
+    [answers]
+  );
 
   function goPrev() {
     setIdx((p) => Math.max(0, p - 1));
@@ -84,6 +91,33 @@ export default function QuizResultPage() {
     params.set("_r", String(Date.now()));
     const qs = params.toString();
     router.replace(qs ? `${path}?${qs}` : path);
+  }
+
+  async function createWrongReviewQuiz() {
+    const materialId = attempt?.quizSet?.materialId;
+    if (!materialId || wrongCount === 0 || creatingReview) return;
+
+    setCreatingReview(true);
+    setActionError("");
+    try {
+      const res = await fetch("/api/quiz/quiz-sets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          materialId,
+          purpose: "WRONG_REVIEW",
+          sourceAttemptId: attemptId,
+          spec: REVIEW_QUIZ_SPEC,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "오답 복습 퀴즈 생성 실패");
+      router.push(`/quiz/take/${data.quizSetId}?mode=new&returnTo=${encodeURIComponent(returnTo)}`);
+    } catch (e: any) {
+      setActionError(e?.message ?? "오류");
+    } finally {
+      setCreatingReview(false);
+    }
   }
 
   function formatShortMyAnswer(a: AnswerRow | null) {
@@ -120,8 +154,18 @@ export default function QuizResultPage() {
             <div className="text-lg font-semibold text-white">{attempt.quizSet?.title ?? "퀴즈 결과"}</div>
             <div className="text-sm text-slate-300">점수 {score} / {maxScore} | {idx + 1}/{items.length}</div>
           </div>
-          <button className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700" onClick={goBackToList}>돌아가기</button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              className="rounded-lg border border-emerald-400/70 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-40"
+              onClick={() => void createWrongReviewQuiz()}
+              disabled={wrongCount === 0 || creatingReview}
+            >
+              {creatingReview ? "생성 중..." : `오답 변형 퀴즈 (${wrongCount})`}
+            </button>
+            <button className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700" onClick={goBackToList}>돌아가기</button>
+          </div>
         </div>
+        {actionError && <div className="mt-3 text-sm text-red-300">{actionError}</div>}
 
         <div className="mt-6 flex-1 overflow-auto rounded-xl bg-emerald-950/60 p-6 text-emerald-50">
           <div className="flex items-center justify-between">

@@ -179,6 +179,10 @@ model QuizSet {
   provider      String?
   model         String?
   promptVersion String?
+  purpose       String  @default("GENERAL") // GENERAL | WRONG_REVIEW | WEAK_TOPIC
+  sourceAttemptId String?
+  sourceTopics Json?
+  sourceItemIds Json?
 
   createdAt DateTime @default(now())
 
@@ -188,6 +192,8 @@ model QuizSet {
 
   @@index([materialId, createdAt])
   @@index([sourceHash])
+  @@index([purpose])
+  @@index([sourceAttemptId])
 }
 
 model QuizItem {

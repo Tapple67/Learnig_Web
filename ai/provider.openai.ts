@@ -296,8 +296,8 @@ export const OpenAIProvider: AIProvider = {
     };
   },
 
-  async generateQuiz({ summary, notes, sourcePages, spec }): Promise<QuizResult> {
-    const prompt = buildQuizPrompt(summary, notes, sourcePages, spec);
+  async generateQuiz({ summary, notes, sourcePages, spec, focus }): Promise<QuizResult> {
+    const prompt = buildQuizPrompt(summary, notes, sourcePages, spec, focus);
     const generatorOptions = {
       model: QUIZ_GENERATOR_MODEL,
       reasoningEffort: QUIZ_GENERATOR_REASONING,

@@ -26,6 +26,7 @@ export async function GET(req: Request) {
         select: {
           id: true,
           title: true,
+          materialId: true,
           items: {
             orderBy: { order: "asc" },
             select: {

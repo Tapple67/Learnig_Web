@@ -1,6 +1,6 @@
-﻿import type { QuizSourcePage } from "@/ai/types";
+import type { QuizFocus, QuizSourcePage } from "@/ai/types";
 
-export const QUIZ_PROMPT_VERSION = "quiz_v5_deep_understanding_no_page_refs";
+export const QUIZ_PROMPT_VERSION = "quiz_v6_review_focus";
 
 export type QuizGenSpec = {
   mcqCount: number;
@@ -10,11 +10,39 @@ export type QuizGenSpec = {
 
 type NotesContext = Array<{ page: number; note: string; signals: unknown }>;
 
+function buildFocusBlock(focus?: QuizFocus) {
+  if (!focus) {
+    return "일반 생성 퀴즈다. 요약, 사용자 메모, 원문 근거를 균형 있게 반영한다.";
+  }
+
+  if (focus.kind === "WRONG_REVIEW") {
+    return `
+오답 복습 퀴즈다.
+- 아래 오답 문항을 그대로 다시 내지 말고, 같은 개념/오개념을 다른 방식으로 묻는 변형 문항을 만든다.
+- 틀린 문항의 topic, explanation, evidence를 우선 반영한다.
+- 학습자가 왜 틀렸는지 드러나는 비교형, 적용형, 오개념 진단형 문항을 우선한다.
+- topics에 없는 내용으로 크게 벗어나지 않는다.
+
+${JSON.stringify(focus, null, 2)}
+`.trim();
+  }
+
+  return `
+약점 주제 집중 퀴즈다.
+- 아래 topics를 최우선 출제 범위로 삼는다.
+- 각 주제의 개념 구분, 적용, 오개념 교정을 묻는다.
+- 전체 자료를 참고하되 topics와 관련 없는 단순 암기 문항은 피한다.
+
+${JSON.stringify(focus, null, 2)}
+`.trim();
+}
+
 export function buildQuizPrompt(
   summaryMarkdown: string,
   notesContext: NotesContext,
   sourcePages: QuizSourcePage[],
-  spec: QuizGenSpec
+  spec: QuizGenSpec,
+  focus?: QuizFocus
 ) {
   return `
 JSON만 출력해서 퀴즈를 생성해라.
@@ -100,6 +128,9 @@ JSON 스키마:
 
 [요약]
 ${summaryMarkdown}
+
+[출제 초점]
+${buildFocusBlock(focus)}
 
 [사용자 메모]
 ${JSON.stringify(notesContext, null, 2)}

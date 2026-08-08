@@ -10,8 +10,9 @@ export default function MaterialStatsModal(props: {
   materialId: string;
   open: boolean;
   onClose: () => void;
+  returnTo?: string;
 }) {
-  const { materialId, open, onClose } = props;
+  const { materialId, open, onClose, returnTo } = props;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -81,7 +82,7 @@ export default function MaterialStatsModal(props: {
           </div>
         )}
 
-        {!loading && !error && data && <MaterialStatsView data={data} />}
+        {!loading && !error && data && <MaterialStatsView data={data} returnTo={returnTo} />}
       </div>
     </Modal>
   );

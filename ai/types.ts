@@ -38,6 +38,22 @@ export type QuizSourcePage = {
   signals: NoteSignals | null;
 };
 
+export type QuizFocus =
+  | {
+      kind: "WRONG_REVIEW";
+      topics: string[];
+      wrongItems: Array<{
+        question: string;
+        topic: string;
+        explanation?: string | null;
+        evidence?: unknown;
+      }>;
+    }
+  | {
+      kind: "WEAK_TOPIC";
+      topics: string[];
+    };
+
 export interface AIProvider {
   buildSummary(input: { packet: MaterialPacket }): Promise<SummaryResult>;
   generateQuiz(input: {
@@ -45,5 +61,6 @@ export interface AIProvider {
     notes: Array<{ page: number; note: string; signals: NoteSignals | null }>;
     sourcePages: QuizSourcePage[];
     spec: { mcqCount: number; tfCount: number; shortCount: number };
+    focus?: QuizFocus;
   }): Promise<QuizResult>;
 }

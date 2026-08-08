@@ -15,6 +15,14 @@ export type QuizSetCard = {
   };
 };
 
+export type SummaryCard = {
+  id: string;
+  title: string;
+  content: string;
+  isStale: boolean;
+  updatedAt: string;
+};
+
 export type SelectedMaterial = {
   id: string;
   title: string;
@@ -22,8 +30,6 @@ export type SelectedMaterial = {
   summary: null | {
     id: string;
     updatedAt: string;
-    provider: string | null;
-    model: string | null;
   };
 };
 
